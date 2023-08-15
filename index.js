@@ -13,22 +13,55 @@ function getNotionApiEndpoint(databaseId) {
 // 정적 파일 제공 (예: HTML, CSS, JS 파일들)
 app.use(express.static(path.join(__dirname, '.')));
 
-// /test 경로에서 HTML 파일 제공
+//노션 API 테스트 URL
 app.get('/notiontest', (req, res) => {
     res.sendFile(path.join(__dirname, 'notionindex.html'));
 });
 
-// /test 경로에서 HTML 파일 제공
+//깃 API 테스트 URL
 app.get('/gittest', (req, res) => {
     res.sendFile(path.join(__dirname, 'gitindex.html'));
 });
 
-// /notion/data 경로에서 Notion 데이터 요청 후 응답
+//티스토리 API 테스트 URL
+app.get('/tistorytest', (req, res) => {
+    res.sendFile(path.join(__dirname, 'tistoryindex.html'));
+});
+
+//Notion 데이터 요청 후 응답
 app.get('/notion/data', async (req, res) => {
     const { notionApiKey, databaseId } = req.query;
+    if (!notionApiKey || !databaseId) {
+        return res.status(400).json({ error: "githubToken and username are required parameters." });
+    }
     try {
         const data = await fetchDataFromNotion(notionApiKey, databaseId);
         res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+//github 레파지토리 목록 데이터 요청 후 응답
+app.get('/github/data', async (req, res) => {
+    const { githubToken, username } = req.query;
+    if (!githubToken || !username) {
+        return res.status(400).json({ error: "githubToken and username are required parameters." });
+    }
+    try {
+        const response = await axios.get(`https://api.github.com/users/${username}/repos`, {
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${githubToken}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+            },
+            params: {
+                sort: "created"
+            }
+        });
+        console.log(response)
+        res.json(response.data);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
