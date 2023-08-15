@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electron App</title>
+</head>
+<body>
+    <h1>Electron App</h1>
+    <input type="text" id="githubToken" placeholder="Enter Github API Key">
+    <input type="text" id="username" placeholder="Enter Github User name">
+    <button onclick="fetchGithubData()">Fetch Data from git</button><br>
+    <input type="text" id="notionApiKeyInput" placeholder="Enter Notion API Key">
+    <input type="text" id="databaseIdInput" placeholder="Enter Database ID">
+    <button onclick="fetchNotionData()">Fetch Data from notion</button>
+    <div id="results"></div>
+    <script src="network/api.js"></script>
+</body>
+</html>
