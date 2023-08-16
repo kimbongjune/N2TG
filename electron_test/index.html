@@ -12,7 +12,11 @@
     <button onclick="fetchGithubData()">Fetch Data from git</button><br>
     <input type="text" id="notionApiKeyInput" placeholder="Enter Notion API Key">
     <input type="text" id="databaseIdInput" placeholder="Enter Database ID">
-    <button onclick="fetchNotionData()">Fetch Data from notion</button>
+    <button onclick="fetchNotionData()">Fetch Data from notion</button><br>
+    <input type="text" id="tistoryAppIDInput" placeholder="Enter tistory App ID">
+    <input type="text" id="tistorySecretKeyInput" placeholder="Enter tistory Secret Key">
+    <input type="text" id="tistoryBlogName" placeholder="Enter tistory Blog Name">
+    <button onclick="fetchTistoryData()">Fetch Data from tistory</button>
     <div id="results"></div>
     <script src="network/api.js"></script>
 </body>
