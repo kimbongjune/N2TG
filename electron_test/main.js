@@ -44,18 +44,19 @@ ipcMain.on('notion-api-renderer', async (event, data) => {
     console.log('Received message from renderer:', data);
 
     if (!notionApiKey || !databaseId) {
-        return res.status(400).json({ error: "githubToken and username are required parameters." });
+        return res.status(400).json({ error: "required parameters." });
     }
     try {
         const data = await fetchDataFromNotion(notionApiKey, databaseId);
-        mainWindow.webContents.send('notion-response', data);
+        const result = await getBlockChildren(notionApiKey, data.results[0].id)
+        mainWindow.webContents.send('notion-response', result);
     } catch (error) {
         console.error('Error fetching data from GitHub:', error.message);
     }
 });
 
 ipcMain.on('tistory-api-renderer', async (event, data) => {
-    const { tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName } = data;
+    const { tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName} = data;
     console.log('Received message from renderer:', data);
 
     if (!tistoryAppIDInput || !tistorySecretKeyInput || !tistoryBlogName) {
@@ -73,8 +74,16 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
         authWindow.loadURL(authUrl);
         authWindow.webContents.on('did-finish-load', async () => {
             const currentPageUrl = await authWindow.webContents.executeJavaScript('window.location.href');
-            console.log('Current page URL:', currentPageUrl);
 
+            console.log('Current page URL:', currentPageUrl);
+            if(currentPageUrl.includes("auth/login")){
+                await clickTisotoryLoginByKakaoButton(authWindow.webContents);
+            }
+
+            if(currentPageUrl.includes("oauth/authorize")){
+                await clickAcceptButton(authWindow.webContents);
+            }
+            
             const matched = currentPageUrl.match(/code=([^&]*)/);
             if(matched){
                 const authCode = matched[1];
@@ -171,4 +180,40 @@ const fetchDataFromNotion = async (notionApiKey, databaseId) => {
     } catch (error) {
         throw new Error("Error fetching data from Notion");
     }
+};
+
+//노션 데이터베이스의 하위 페이지를 가져오는 함수
+const getBlockChildren = async (notionApiKey, blockId) => {
+    try {
+        const response = await axios.get(`https://api.notion.com/v1/blocks/${blockId}/children`, {
+            headers: {
+                'Authorization': `Bearer ${notionApiKey}`,
+                'Notion-Version': '2021-05-13'
+            }
+        });
+
+        return response.data.results;
+    } catch (error) {
+        console.error('Error fetching block children from Notion:', error.message);
+    }
+}
+
+//카카오 로그인 버튼이 있을 때 클릭하는 함수
+const clickTisotoryLoginByKakaoButton = async (webContents) => {
+    await webContents.executeJavaScript(`
+        const btnElement = document.querySelector(".link_kakao_id");
+        if (btnElement) {
+            btnElement.click();
+        }
+    `);
+};
+
+//허가하기 버튼이 있을 때 클릭하는 함수
+const clickAcceptButton = async (webContents) => {
+    await webContents.executeJavaScript(`
+        const confirmBtnElement = document.querySelector(".confirm");
+        if (confirmBtnElement) {
+            confirmBtnElement.click();
+        }
+    `);
 };
