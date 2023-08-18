@@ -1,6 +1,16 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const axios = require('axios');
 const path = require('path');
+const { saveGithubParameter, 
+    getGithubParameter, 
+    saveNotionParameter, 
+    getNotionParameter, 
+    saveTistoryParameter, 
+    getTistoryParameter, 
+    deleteGithubParameter,
+    deleteNotionParameter,
+    deleteTistoryParameter 
+} = require('./store.js');
 
 let mainWindow;
 
@@ -16,11 +26,55 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        const githubParams = getGithubParameter();
+        if (githubParams) {
+            const { githubApiToken, githubUsername } = githubParams
+            mainWindow.webContents.executeJavaScript(`
+                document.querySelector('#githubToken').value = "${githubApiToken}";
+                document.querySelector('#username').value = "${githubUsername}";
+            `);
+        } else {
+            console.log("Token or username is missing");
+        }
+
+        const notionParams = getNotionParameter();
+        if (notionParams) {
+            const { notionApiKey, notionDatabaseId } = notionParams
+            mainWindow.webContents.executeJavaScript(`
+                document.querySelector('#notionApiKeyInput').value = "${notionApiKey}";
+                document.querySelector('#databaseIdInput').value = "${notionDatabaseId}";
+            `);
+        } else {
+            console.log("Token or username is missing");
+        }
+
+        const tistoryParams = getTistoryParameter();
+        if (tistoryParams) {
+            const { tistoryAppId, tistorySecretKey, tistoryBlogName } = tistoryParams
+            mainWindow.webContents.executeJavaScript(`
+                document.querySelector('#tistoryAppIDInput').value = "${tistoryAppId}";
+                document.querySelector('#tistorySecretKeyInput').value = "${tistorySecretKey}";
+                document.querySelector('#tistoryBlogName').value = "${tistoryBlogName}";
+            `);
+        } else {
+            console.log("Token or username is missing");
+        }
+    });
+
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
 }
 
 ipcMain.on('git-api-renderer', async (event, data) => {
     const { githubToken, username } = data;
     console.log('Received message from renderer:', data);
+
+    if (!githubToken || !username) {
+        return res.status(400).json({ error: "required parameters." });
+    }
 
     try {
         const response = await axios.get(`https://api.github.com/users/${username}/repos`, {
@@ -34,8 +88,10 @@ ipcMain.on('git-api-renderer', async (event, data) => {
             }
         });
         mainWindow.webContents.send('github-response', response.data);
+        saveGithubParameter(githubToken, username)
     } catch (error) {
         console.error('Error fetching data from GitHub:', error.message);
+        deleteGithubParameter()
     }
 });
 
@@ -46,12 +102,15 @@ ipcMain.on('notion-api-renderer', async (event, data) => {
     if (!notionApiKey || !databaseId) {
         return res.status(400).json({ error: "required parameters." });
     }
+    
     try {
         const data = await fetchDataFromNotion(notionApiKey, databaseId);
         const result = await getBlockChildren(notionApiKey, data.results[0].id)
         mainWindow.webContents.send('notion-response', result);
+        saveNotionParameter(notionApiKey, databaseId)
     } catch (error) {
         console.error('Error fetching data from GitHub:', error.message);
+        deleteNotionParameter()
     }
 });
 
@@ -62,6 +121,7 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
     if (!tistoryAppIDInput || !tistorySecretKeyInput || !tistoryBlogName) {
         return res.status(400).json({ error: "githubToken and username are required parameters." });
     }
+    
     try {
         const authUrl = `https://www.tistory.com/oauth/authorize?client_id=97b3760fd96e15837242fd490636b7b7&redirect_uri=https://nocdu112.tistory.com/&response_type=code`;
 
@@ -91,24 +151,12 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
                 try {
                     const accessToken = await getAccessToken(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, authCode);
                     mainWindow.webContents.send('tistory-response', accessToken);
-                    //authWindow.close();
+                    saveTistoryParameter(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName)
                 } catch (error) {
                     console.error("Error while fetching access token:", error);
                     mainWindow.webContents.send('tistory-response', error);
                 }
             }
-            //console.log("url : ", authWindow.webContents.getURL());
-            // if (matched) {
-            //     const authCode = matched[1];
-            //     authWindow.close();
-            //     try {
-            //         const accessToken = await getAccessToken(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, authCode);
-            //         mainWindow.webContents.send('tistory-response', accessToken);
-            //     } catch (error) {
-            //         console.error("Error while fetching access token:", error);
-            //         mainWindow.webContents.send('tistory-response', error);
-            //     }
-            // }
         });
         
         authWindow.on('closed', () => {
@@ -117,6 +165,7 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
         
     } catch (error) {
         console.error('Error fetching data from tistory:', error.message);
+        deleteTistoryParameter()
     }
 });
 
@@ -133,11 +182,6 @@ app.on('activate', () => {
         createWindow();
     }
 });
-
-//노션 API URL을 생성하는 함수
-function getNotionApiEndpoint(databaseId) {
-    return `https://api.notion.com/v1/databases/${databaseId}/query`;
-}
 
 //tistory access 키 API 요청 함수
 const getAccessToken = async(clientId, clientSecret, redirectUri, code) =>{
@@ -161,7 +205,7 @@ const getAccessToken = async(clientId, clientSecret, redirectUri, code) =>{
 //노션 API 요청 함수
 const fetchDataFromNotion = async (notionApiKey, databaseId) => {
     try {
-        const response = await axios.post(getNotionApiEndpoint(databaseId), {
+        const response = await axios.post(`https://api.notion.com/v1/databases/${databaseId}/query`, {
             filter: {
                 property: "상태",
                 select: {
