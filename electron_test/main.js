@@ -12,6 +12,11 @@ const { saveGithubParameter,
     deleteTistoryParameter 
 } = require('./store.js');
 
+const { Client } = require("@notionhq/client");
+const {initiallizeNotionToMarkdownInstance, convertToMarkdown} = require('./notionToMarkdown.js'); 
+const convertNotionDataToHtml = require('./notionToHtml');
+const {saveMarkdownFile, saveHtmlFile} = require("./utils.js")
+
 let mainWindow;
 
 function createWindow() {
@@ -102,15 +107,23 @@ ipcMain.on('notion-api-renderer', async (event, data) => {
     if (!notionApiKey || !databaseId) {
         return res.status(400).json({ error: "required parameters." });
     }
+
     
+    const notion =  new Client({
+        auth: notionApiKey
+    });
+
+    initiallizeNotionToMarkdownInstance(notion);
+
     try {
-        const data = await fetchDataFromNotion(notionApiKey, databaseId);
-        const result = await getBlockChildren(notionApiKey, data.results[0].id)
-        mainWindow.webContents.send('notion-response', result);
+        const data = await fetchDataFromNotion(notion, databaseId);
+        
+        const returnData = await handleNotionDataConversion(data.results[0].id, notionApiKey)
+        mainWindow.webContents.send('notion-response', returnData);
         saveNotionParameter(notionApiKey, databaseId)
     } catch (error) {
         console.error('Error fetching data from GitHub:', error.message);
-        deleteNotionParameter()
+        //deleteNotionParameter()
     }
 });
 
@@ -151,7 +164,17 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
                 try {
                     const accessToken = await getAccessToken(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, authCode);
                     mainWindow.webContents.send('tistory-response', accessToken);
-                    saveTistoryParameter(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName)
+                    const match = currentPageUrl.match(/https:\/\/(.*?)\.tistory\.com\//);
+                    const blogName = match ? match[1] : null;
+                    //console.log(blogName); 
+                    const testContent = `<h1>제목</h1>
+                    <p>이것은 본문의 첫 번째 문단입니다.</p>
+                    <p>이것은 본문의 두 번째 문단입니다.</p>`
+                    if(accessToken){
+                        const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, "테스트 게시물", testContent, "java")
+                        saveTistoryParameter(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName)
+                        mainWindow.webContents.send('tistory-response', tistoryWriteResponse);
+                    }
                 } catch (error) {
                     console.error("Error while fetching access token:", error);
                     mainWindow.webContents.send('tistory-response', error);
@@ -183,6 +206,27 @@ app.on('activate', () => {
     }
 });
 
+//티스토리 블로그 글 작성 함수
+const writeBlogContent = async(token, blogName, title, content, tag, categoryId = 0) =>{
+    try {
+        const response = await axios.post("https://www.tistory.com/apis/post/write", null, { 
+            params: {
+                access_token : token,
+                output : "json",
+                blogName : blogName,
+                visibility : 3,
+                title : title,
+                content : content,
+                category : categoryId,
+                tag : tag
+            } 
+        });
+        return response.data;
+    } catch (error) {
+        throw new Error(error);
+    }
+}
+
 //tistory access 키 API 요청 함수
 const getAccessToken = async(clientId, clientSecret, redirectUri, code) =>{
     console.log("@@@@@@@@@", clientId, clientSecret, redirectUri, code)
@@ -203,44 +247,23 @@ const getAccessToken = async(clientId, clientSecret, redirectUri, code) =>{
 }
 
 //노션 API 요청 함수
-const fetchDataFromNotion = async (notionApiKey, databaseId) => {
+const fetchDataFromNotion = async (notion, databaseId) => {
     try {
-        const response = await axios.post(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+        const response = await notion.databases.query({
+            database_id: databaseId,
             filter: {
                 property: "상태",
                 select: {
                     equals: "발행 요청"
                 }
             }
-        }, {
-            headers: {
-                'Authorization': `Bearer ${notionApiKey}`,
-                'Notion-Version': '2022-06-28',
-                'Content-Type': 'application/json'
-            }
         });
 
-        return response.data;
+        return response;
     } catch (error) {
-        throw new Error("Error fetching data from Notion");
+        throw new Error("Error fetching data from Notion"+error);
     }
 };
-
-//노션 데이터베이스의 하위 페이지를 가져오는 함수
-const getBlockChildren = async (notionApiKey, blockId) => {
-    try {
-        const response = await axios.get(`https://api.notion.com/v1/blocks/${blockId}/children`, {
-            headers: {
-                'Authorization': `Bearer ${notionApiKey}`,
-                'Notion-Version': '2021-05-13'
-            }
-        });
-
-        return response.data.results;
-    } catch (error) {
-        console.error('Error fetching block children from Notion:', error.message);
-    }
-}
 
 //카카오 로그인 버튼이 있을 때 클릭하는 함수
 const clickTisotoryLoginByKakaoButton = async (webContents) => {
@@ -261,3 +284,13 @@ const clickAcceptButton = async (webContents) => {
         }
     `);
 };
+
+//노션 데이터를 markdown 파일로 변환하고, html파일로 변환 및 저장하는 함수
+const handleNotionDataConversion = async(pageId, notionApiKey) =>{
+    const mdString = await convertToMarkdown(pageId);
+    await saveMarkdownFile(mdString);
+    const htmlData = await convertNotionDataToHtml(pageId, notionApiKey);
+    await saveHtmlFile(htmlData);
+
+    return htmlData.html
+}
