@@ -2,10 +2,11 @@ const Store = require('electron-store');
 const store = new Store();
 
 //깃허브 API 사용 파라미터를 저장하는 함수
-const saveGithubParameter = (githubApiToken, githubUsername) =>{
+const saveGithubParameter = (githubApiToken, githubUsername, repositoryName) =>{
     store.set('githubParameter', {
         "githubApiToken" : githubApiToken, 
-        "githubUsername" : githubUsername
+        "githubUsername" : githubUsername,
+        "repositoryName" : repositoryName,
     });
 }
 
@@ -16,7 +17,9 @@ const getGithubParameter = () =>{
 
 //깃허브 API 사용 파라미터를 삭제하는 함수
 const deleteGithubParameter = () => {
-    store.delete("githubParameter");
+    if(store.get("githubParameter")){
+        store.delete("githubParameter");
+    }
 }
 
 //노션 API 사용 파라미터를 저장하는 함수
