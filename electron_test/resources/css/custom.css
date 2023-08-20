@@ -1,0 +1,15 @@
+body{
+    margin: 1rem;
+}
+
+.form-group{
+    margin-top: 0.5rem;
+}
+
+#category-title {
+    font-size: 1.25rem; /* 제목의 크기를 조절합니다. */
+    margin-bottom: 1rem; /* 라디오 버튼과의 간격을 주기 위해 마진을 설정합니다. */
+    color: #333; /* 제목의 색상을 조절합니다. */
+    border-bottom: 2px solid #ddd; /* 제목 아래에 경계선을 추가합니다. */
+    padding-bottom: 0.5rem; /* 경계선과 제목 간의 간격을 주기 위해 패딩을 설정합니다. */
+}

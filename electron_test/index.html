@@ -4,20 +4,134 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Electron App</title>
+    <link href="resources/css/bootstrap-5.3.1.css" rel="stylesheet">
+    <link href="resources/css/custom.css" rel="stylesheet">
 </head>
 <body>
-    <h1>Electron App</h1>
-    <input type="text" id="githubToken" placeholder="Enter Github API Key">
-    <input type="text" id="username" placeholder="Enter Github User name">
-    <button onclick="fetchGithubData()">Fetch Data from git</button><br>
-    <input type="text" id="notionApiKeyInput" placeholder="Enter Notion API Key">
-    <input type="text" id="databaseIdInput" placeholder="Enter Database ID">
-    <button onclick="fetchNotionData()">Fetch Data from notion</button><br>
-    <input type="text" id="tistoryAppIDInput" placeholder="Enter tistory App ID">
-    <input type="text" id="tistorySecretKeyInput" placeholder="Enter tistory Secret Key">
-    <input type="text" id="tistoryBlogName" placeholder="Enter tistory Blog Name">
-    <button onclick="fetchTistoryData()">Fetch Data from tistory</button>
+    <h1>N2TG</h1>
     <div id="results"></div>
+    <br>
+    <div class="notion-validtaion-group" id="notion-validation-group">
+        <div class="form-group">
+            <small id="notion-api-help" class="form-text text-muted">노션 API키</small>
+            <input type="text" class="form-control" id="notionApiKeyInput" aria-describedby="notion-api-help" placeholder="노션 API키">
+            <div class="notion-vlidation-feedback invalid-feedback" id="notion-apikey-peedback">
+                노션 API키를 입력하세요. 공백은 입력할 수 없습니다.
+            </div>
+        </div>
+        <div class="form-group">
+            <small id="database-help" class="form-text text-muted">노션 데이터베이스 ID</small>
+            <input type="text" class="form-control" id="databaseIdInput" aria-describedby="database-help"  placeholder="노션 데이터베이스 ID">
+            <div class="notion-vlidation-feedback invalid-feedback" id="notion-database-peedback">
+                노션 데이터베이스 ID를 입력하세요. 공백은 입력할 수 없습니다.
+            </div>
+        </div>
+        <div class="form-group">
+            <button id="btn-validation-notion" class="btn btn-outline-primary" onclick="fetchNotionData()">노션 API 검증</button>
+        </div>
+    </div>
+    <div class="notion-vlidation-feedback valid-feedback">
+        노션 API키 검증이 완료되었습니다
+    </div>
+    <div class="notion-vlidation-feedback invalid-feedback">
+        노션 API키 검증이 필요합니다.
+    </div>
+    <br>
+    <div class="checkbox">
+        <label data-toggle="collapse" data-target="#github-collapse" aria-expanded="false" aria-controls="github-collapse">
+          <input type="checkbox" id="github-used-flag"/>깃허브 사용
+        </label>
+    </div>
+    <div id="github-collapse" aria-expanded="false" class="collapse">
+        <div class="github-validtaion-group" id="github-validation-group">
+            <div class="form-group">
+                <small id="githubToken-help" class="form-text text-muted">깃허브 API키</small>
+                <input type="text" class="form-control" id="githubToken" aria-describedby="githubToken-help" placeholder="깃허브 API키">
+                <div class="git-vlidation-feedback invalid-feedback" id="git-apikey-peedback">
+                    깃허브 API키를 입력하세요. 공백은 입력할 수 없습니다.
+                </div>
+            </div>
+            <div class="form-group">
+                <small id="username-help" class="form-text text-muted">레파지토리 소유자</small>
+                <input type="text" class="form-control" id="username" aria-describedby="username-help"  placeholder="레파지토리 소유자">
+                <div class="git-vlidation-feedback invalid-feedback" id="git-username-peedback">
+                    레파지토리 소유자를 입력하세요. 공백은 입력할 수 없습니다.
+                </div>
+            </div>
+            <div class="form-group">
+                <small id="repositoryName-help" class="form-text text-muted">커밋 할 레파지토리</small>
+                <input type="text" class="form-control" id="repositoryName" aria-describedby="repositoryName-help"  placeholder="커밋 할 레파지토리">
+                <div class="git-vlidation-feedback invalid-feedback"  id="git-repository-name-peedback">
+                    커밋 할 레파지토리를 입력하세요. 공백은 입력할 수 없습니다.
+                </div>
+            </div>
+            <div class="form-group">
+                <button id="btn-validation-github" class="btn btn-outline-primary" onclick="fetchGithubData()">깃허브 API 검증</button>
+            </div>
+        </div>
+        <div class="git-vlidation-feedback valid-feedback">
+            깃허브 API키 검증이 완료되었습니다
+        </div>
+        <div class="git-vlidation-feedback invalid-feedback">
+            깃허브 API키 검증이 필요합니다.
+        </div>
+    </div>
+    <br>
+    <div class="checkbox">
+        <label data-toggle="collapse" data-target="#tistory-collapse" aria-expanded="false" aria-controls="tistory-collapse">
+          <input type="checkbox" id="tistory-used-flag"/>티스토리 사용
+        </label>
+    </div>
+    <div id="tistory-collapse" aria-expanded="false" class="collapse">
+        <div class="tistory-validation-group" id="tistory-validation-group">
+            <div class="form-group">
+                <small id="tistory-appid-help" class="form-text text-muted">티스토리 앱 아이디</small>
+                <input type="text" class="form-control" id="tistoryAppIDInput" aria-describedby="tistory-appid-help" placeholder="Enter tistory App ID">
+                <div class="tistory-validation-feedback invalid-feedback" id="tistory-appid-peedback">
+                    티스토리 App ID를 입력하세요. 공백은 입력할 수 없습니다.
+                </div>
+            </div>
+            <div class="form-group">
+                <small id="tistory-secretkey-help" class="form-text text-muted">티스토리 Secret Key</small>
+                <input type="text" class="form-control" id="tistorySecretKeyInput" aria-describedby="tistory-secretkey-help" placeholder="Enter tistory Secret Key">
+                <div class="tistory-validation-feedback invalid-feedback" id="tistory-secretkey-peedback">
+                    티스토리 Secret Key를 입력하세요. 공백은 입력할 수 없습니다.
+                </div>
+            </div>
+            <div class="form-group">
+                <small id="tistory-blogname-help" class="form-text text-muted">티스토리 블로그이름</small>
+                <input type="text" class="form-control" id="tistoryBlogName" aria-describedby="tistory-blogname-help" placeholder="Enter tistory Blog Name">
+                <div class="tistory-validation-feedback invalid-feedback" id="tistory-blogname-peedback">
+                    티스토리 Blog Name을 입력하세요. 공백은 입력할 수 없습니다.
+                </div>
+            </div>
+            <div class="form-group">
+                <button id="btn-validation-tistory" class="btn btn-outline-primary" onclick="fetchTistoryData()">티스토리 API 검증</button>
+            </div>
+        </div>
+        <div class="tistory-validation-feedback valid-feedback">
+            티스토리 API 검증이 완료되었습니다
+        </div>
+        <div class="tistory-validation-feedback invalid-feedback">
+            티스토리 API 검증이 필요합니다.
+        </div>
+    </div>
+    <br><br>
+    <div>
+        <h5 id="category-title">게시글 카테고리 선택</h5>
+        <div id="category-container">
+
+        </div>
+    </div>
+    <br><br>
+    <div id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; background-color: rgba(0,0,0,0.5);">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div id="overlay-text" style="color: white; margin-top: 10px;" class="text-white">Loading...</div>
+        </div>
+    </div>
+    <button class="btn btn-outline-primary" onclick="postData()">게시글 작성</button>
+    <script src="resources/js/bootstrap-5.3.1.js"></script>
     <script src="network/api.js"></script>
 </body>
 </html>
