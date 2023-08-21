@@ -15,7 +15,7 @@ const { saveGithubParameter,
 const { Client } = require("@notionhq/client");
 const {initiallizeNotionToMarkdownInstance, convertToMarkdown} = require('./notionToMarkdown.js'); 
 const convertNotionDataToHtml = require('./notionToHtml');
-const {saveMarkdownFile, saveHtmlFile} = require("./utils.js")
+const {getFormattedDate, saveMarkdownFile, saveHtmlFile, encodingToBase64} = require("./utils.js")
 
 let mainWindow;
 
@@ -95,7 +95,9 @@ ipcMain.on('git-api-validation', async (event, data) => {
             mainWindow.webContents.send('git-api-validation-response', {status:"success", result : response.data, code:200});
             saveGithubParameter(githubToken, username, repositoryName)
         }
-        
+        //mainWindow.webContents.send('git-api-validation-response', {status:"success", result : lastCommitSha, code:200});
+        // saveGithubParameter(githubToken, username, repositoryName)
+        // mainWindow.webContents.send('git-api-validation-response', {status:"success", result : "zz", code:200});
     } catch (error) {
         if(error.response.status == 401){
             mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:"토큰값을 확인해주세요", code:401});    
@@ -105,7 +107,7 @@ ipcMain.on('git-api-validation', async (event, data) => {
             mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:error.message});
         }
         console.error('Error fetching data from GitHub:', error);        
-        deleteGithubParameter()
+        //deleteGithubParameter()
     }
 });
 
@@ -173,7 +175,7 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
     }
     
     try {
-        const authUrl = `https://www.tistory.com/oauth/authorize?client_id=97b3760fd96e15837242fd490636b7b7&redirect_uri=https://nocdu112.tistory.com/&response_type=code`;
+        const authUrl = `https://www.tistory.com/oauth/authorize?client_id=${tistoryAppIDInput}&redirect_uri=${tistoryBlogName}&response_type=code`;
 
         let authWindow = new BrowserWindow({
             show: true, // 이 설정을 통해 창을 숨깁니다.
@@ -235,7 +237,7 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
     }
     
     try {
-        const authUrl = `https://www.tistory.com/oauth/authorize?client_id=97b3760fd96e15837242fd490636b7b7&redirect_uri=https://nocdu112.tistory.com/&response_type=code`;
+        const authUrl = `https://www.tistory.com/oauth/authorize?client_id=${tistoryAppIDInput}&redirect_uri=${tistoryBlogName}&response_type=code`;
 
         let authWindow = new BrowserWindow({
             show: true, // 이 설정을 통해 창을 숨깁니다.
@@ -437,4 +439,112 @@ const handleNotionDataConversion = async(pageId, notionApiKey) =>{
     await saveHtmlFile(htmlData);
 
     return htmlData.html
+}
+
+//만약 커밋 해시가 존재하지 않는다면 첫 커밋을 발생시키고 해당 값을 리턴시킴
+async function createInitialCommit(username, repositoryName, githubToken) {
+    try {
+        const response = await axios.put(`https://api.github.com/repos/${username}/${repositoryName}/contents/README.md`, {
+            message: 'Initial commit',
+            content: Buffer.from('#create commit').toString('base64') // 예시로 README.md에 # Welcome to the repository 를 적는 것입니다.
+        }, {
+            headers: {
+                'Authorization': `Bearer ${githubToken}`
+            }
+        });
+
+        return response.data.commit.sha;
+    } catch (error) {
+        console.error('Error creating initial commit:', error);
+        throw error;
+    }
+}
+
+//깃허브의 브랜치를 새로 생성하기위해 최신 커밋의 SHA를 가져오기 위한 함수
+async function getLastCommitSHA(username, repositoryName, githubToken) {
+    try {
+        const response = await axios.get(`https://api.github.com/repos/${username}/${repositoryName}/branches/main`, {
+            headers: {
+                'Authorization': `Bearer ${githubToken}`
+            }
+        });
+        return response.data.commit.sha;
+    } catch (error) {
+        if (error.response && error.response.status === 404) {
+            return await createInitialCommit(username, repositoryName, githubToken);
+        }
+        throw { status: "failed", result: "Error fetching branch data from GitHub", code: error.response.status };
+    }
+}
+
+//브런치를 생성하는 함수.
+async function createBranch(username, repositoryName, branchName, lastCommitSHA, githubToken) {
+    try {
+        await axios.post(`https://api.github.com/repos/${username}/${repositoryName}/git/refs`, {
+            ref: `refs/heads/${branchName}`,
+            sha: lastCommitSHA
+        }, {
+            headers: {
+                'Authorization': `Bearer ${githubToken}`
+            }
+        });
+    } catch (error) {
+        throw { status: "failed", result: "Error creating branch on GitHub", code: error.response.status };
+    }
+}
+
+//md파일을 이용해 커밋을 발생시키는 함수
+async function commitFile(username, repositoryName, fileName, fileContent, branchName, githubToken) {
+    try {
+        await axios.put(`https://api.github.com/repos/${username}/${repositoryName}/contents/${fileName}`, {
+            message: `${getFormattedDate()}_TIL`,
+            content: Buffer.from(fileContent).toString('base64'),
+            branch: branchName
+        }, {
+            headers: {
+                'Authorization': `Bearer ${githubToken}`
+            }
+        });
+    } catch (error) {
+        throw { status: "failed", result: "Error committing file on GitHub", code: error.response.status };
+    }
+}
+
+
+//PR을 생성하는 함수
+async function createPullRequest(username, repositoryName, prTitle, sourceBranch, targetBranch, githubToken) {
+    try {
+        const response = await axios.post(`https://api.github.com/repos/${username}/${repositoryName}/pulls`, {
+            title: prTitle,
+            head: sourceBranch,
+            base: targetBranch
+        }, {
+            headers: {
+                'Authorization': `Bearer ${githubToken}`
+            }
+        });
+        return response.data.html_url;
+    } catch (error) {
+        throw { status: "failed", result: "Error creating pull request on GitHub", code: error.response.status };
+    }
+}
+
+// 모든 프로세스를 순서대로 실행하는 함수
+async function processGithubActions(username, repositoryName, filePath, fileContent, prTitle, githubToken) {
+    try {
+        const lastCommitSHA = await getLastCommitSHA(username, repositoryName, githubToken);
+        
+        const newBranchName = 'new-branch-name'; 
+        await createBranch(username, repositoryName, newBranchName, lastCommitSHA, githubToken);
+        
+        await commitFile(username, repositoryName, filePath, fileContent, newBranchName, githubToken);
+        
+        const targetBranch = 'main';
+        const prURL = await createPullRequest(username, repositoryName, prTitle, newBranchName, targetBranch, githubToken);
+        
+        return prURL;  // PR의 URL을 반환합니다.
+        
+    } catch (error) {
+        return error;
+    }
 }
