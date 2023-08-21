@@ -22,7 +22,14 @@ const saveHtmlFile = async (htmlData) =>{
     });
 }
 
+//문자열을 base64로 인코딩 하는 함수
+const encodingToBase64 = async(content) =>{
+    return Buffer.from(content).toString('base64');
+}
+
 module.exports = {
+    getFormattedDate,
     saveMarkdownFile,
-    saveHtmlFile
+    saveHtmlFile,
+    encodingToBase64
 }

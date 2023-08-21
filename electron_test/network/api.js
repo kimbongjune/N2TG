@@ -38,6 +38,7 @@ window.electron.ipcRenderer.on('git-api-validation-response', (data) => {
 });
 
 window.electron.ipcRenderer.on('notion-validation-response', (data) => {
+    hideOverlay("노션 검증 완료")
     if (data.status == "failed") {
         console.log(data);
         
@@ -80,6 +81,7 @@ window.electron.ipcRenderer.on('notion-response', (data) => {
 });
 
 window.electron.ipcRenderer.on('tistory-validation-response', (data) => {
+    hideOverlay("티스토리 검증 완료")
     if (data.status == "failed") {
         console.log(data);
 
@@ -110,6 +112,12 @@ window.electron.ipcRenderer.on('tistory-validation-response', (data) => {
         const btnElement = document.getElementById('btn-validation-tistory');
         toggleButtonColorClass("티스토리", btnElement, false);
 
+        const container = document.getElementById('category-container'); 
+        container.innerHTML = '';
+        const validElement = document.getElementById('tistory-category-validation-valid-feedback');
+        validElement.style.display = 'none';
+        const invalidElement = document.getElementById('tistory-category-validation-invalid-feedback');
+        invalidElement.style.display = 'block';
     } else {
         console.log("검증 성공");
         const validationGroupElement = document.getElementById('tistory-validation-group');
@@ -128,6 +136,10 @@ window.electron.ipcRenderer.on('tistory-validation-response', (data) => {
             localStorage.setItem("categories", JSON.stringify(extractedData));
             createRadioButtons(extractedData)
         }
+        const invalidElement = document.getElementById('tistory-category-validation-invalid-feedback');
+        invalidElement.style.display = 'none';
+        const validElement = document.getElementById('tistory-category-validation-valid-feedback');
+        validElement.style.display = 'block';
         toggleButtonColorClass("티스토리", btnElement, true);
     }
 });
@@ -138,7 +150,6 @@ window.electron.ipcRenderer.on('tistory-response', (data) => {
 });
 
 function fetchGithubData() {
-    showOverlay("깃허브 검증중...")
     const githubToken = document.getElementById('githubToken').value;
     const username = document.getElementById('username').value;
     const repositoryName = document.getElementById('repositoryName').value;
@@ -178,6 +189,7 @@ function fetchGithubData() {
         toggleClass(element, true)
     }
 
+    showOverlay("깃허브 검증중...")
     window.electron.ipcRenderer.send('git-api-validation', { githubToken, username, repositoryName });
 }
 
@@ -210,7 +222,7 @@ function fetchNotionData() {
         const element = document.getElementById('databaseIdInput');
         toggleClass(element, true);
     }
-
+    showOverlay("노션 검증중...")
     window.electron.ipcRenderer.send('notion-api-validation', { notionApiKey, databaseId });
 }
 
@@ -257,7 +269,7 @@ function fetchTistoryData() {
         const element = document.getElementById('tistoryBlogName');
         toggleClass(element, true);
     }
-
+    showOverlay("티스토리 검증중...")
     window.electron.ipcRenderer.send('tistory-api-validation', { tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName });
 }
 
@@ -300,16 +312,6 @@ document.addEventListener("DOMContentLoaded", function(){
         collapse.hide();
     }
 
-    githubUsedCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-            localStorage.setItem("githubUsedFlag", true);
-            collapse.show();
-        } else {
-            localStorage.setItem("githubUsedFlag", false);
-            collapse.hide();
-        }
-    });
-
     const tistoryUsedCheckbox = document.getElementById('tistory-used-flag');
     const tistoryCollapseElement = document.getElementById('tistory-collapse');
     const tistoryUsedFlag = localStorage.getItem("tistoryUsedFlag");
@@ -326,15 +328,42 @@ document.addEventListener("DOMContentLoaded", function(){
         tistoryCollapse.hide();
     }
 
+    githubUsedCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            localStorage.setItem("githubUsedFlag", true);
+            const element = document.getElementById("git-tistory-validator")
+            element.style.display = "none"
+            collapse.show();
+        } else {
+            localStorage.setItem("githubUsedFlag", false);
+            collapse.hide();
+            if (!tistoryUsedCheckbox.checked) {
+                const element = document.getElementById("git-tistory-validator");
+                element.style.display = "block";
+            }
+        }
+    });
+
     tistoryUsedCheckbox.addEventListener('change', function() {
         if (this.checked) {
             localStorage.setItem("tistoryUsedFlag", 'true');
+            const element = document.getElementById("git-tistory-validator")
+            element.style.display = "none"
             tistoryCollapse.show();
         } else {
             localStorage.setItem("tistoryUsedFlag", 'false');
             tistoryCollapse.hide();
+            if (!githubUsedCheckbox.checked) {
+                const element = document.getElementById("git-tistory-validator");
+                element.style.display = "block";
+            }
         }
     });
+
+    if(!tistoryUsedCheckbox.checked && !githubUsedCheckbox.checked){
+        const element = document.getElementById("git-tistory-validator");
+        element.style.display = "block";
+    }
 
     const githubValidationFlag = localStorage.getItem("githubValidationFlag");
     if(githubValidationFlag != null){
@@ -373,6 +402,11 @@ document.addEventListener("DOMContentLoaded", function(){
         toggleClass(element, isValid);
         const btnElement = document.getElementById('btn-validation-tistory');
         toggleButtonColorClass("티스토리", btnElement, isValid);
+    }else{
+        const element = document.getElementById('tistory-validation-group');
+        toggleClass(element, false);
+        const btnElement = document.getElementById('btn-validation-tistory');
+        toggleButtonColorClass("티스토리", btnElement, false);
     }
 
     const storedData = JSON.parse(localStorage.getItem("categories"));
@@ -431,40 +465,199 @@ function handleRadioChange(event) {
 }
 
 function postData(){
-    alert("zz")
-}
 
-function setOverlayText(text = "") {
-    const overlayText = document.getElementById('overlay-text');
-    overlayText.textContent = text;
+    const tistoryUsedFlag = document.getElementById('tistory-used-flag').checked;
+    const githubUsedFlag = document.getElementById('github-used-flag').checked;
 
-    // 텍스트가 없다면 텍스트를 숨기고, 있다면 보이게 함
-    if (!text) {
-        overlayText.classList.add('visually-hidden');
+    const notionApiKey = document.getElementById('notionApiKeyInput').value;
+    const databaseId = document.getElementById('databaseIdInput').value;
+
+    const githubToken = document.getElementById('githubToken').value;
+    const username = document.getElementById('username').value;
+    const repositoryName = document.getElementById('repositoryName').value;
+
+    const tistoryAppIDInput = document.getElementById('tistoryAppIDInput').value;
+    const tistorySecretKeyInput = document.getElementById('tistorySecretKeyInput').value;
+    const tistoryBlogName = document.getElementById('tistoryBlogName').value;
+
+    let categoryId = 0
+
+    // Check for Notion API key
+    validateInputField(notionApiKey, 'notionApiKeyInput', 'notion-apikey-peedback', 'notion-validation-group', 'btn-validation-notion', "노션 API키를 입력하세요. 공백은 입력할 수 없습니다.", "노션", "notionValidationFlag");
+    validateInputField(databaseId, 'databaseIdInput', 'notion-database-peedback', 'notion-validation-group', 'btn-validation-notion', "노션 데이터베이스 ID를 입력하세요. 공백은 입력할 수 없습니다.", "노션", "notionValidationFlag");
+    
+    if (!handleValidation("노션", "notionValidationFlag", 'notion-validation-group', 'btn-validation-notion')) {
+        return;
+    }
+
+    if (tistoryUsedFlag && !githubUsedFlag) {
+        //티스토리만 사용
+        validateInputField(tistoryAppIDInput, 'tistoryAppIDInput', 'tistory-appid-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 App ID를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
+        validateInputField(tistorySecretKeyInput, 'tistorySecretKeyInput', 'tistory-secretkey-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Secret Key를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
+        validateInputField(tistoryBlogName, 'tistoryBlogName', 'tistory-blogname-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Blog Name을 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
+        
+        const tistoryValidationFlag = localStorage.getItem("tistoryValidationFlag");
+        if (tistoryValidationFlag != null) {
+            const isValid = tistoryValidationFlag === "true";
+            const element = document.getElementById('tistory-validation-group');
+            toggleClass(element, isValid);
+            const btnElement = document.getElementById('btn-validation-tistory');
+            toggleButtonColorClass("티스토리", btnElement, isValid);
+            if(!isValid){
+                return;
+            }
+        }
+
+        if (!handleValidation("티스토리", "tistoryValidationFlag", 'tistory-validation-group', 'btn-validation-tistory')) {
+            return;
+        }
+        categoryId = getCheckedRadioButtonValue()
+        console.log("티스토리만 사용",notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput,tistoryBlogName, categoryId)
+        return;
+    } else if (!tistoryUsedFlag && githubUsedFlag) {
+        //깃허브만 사용
+        validateInputField(githubToken, 'githubToken', 'git-apikey-peedback', 'github-validation-group', 'btn-validation-github', "깃허브 API키를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
+        validateInputField(username, 'username', 'git-username-peedback', 'github-validation-group', 'btn-validation-github', "레파지토리 소유자를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
+        validateInputField(repositoryName, 'repositoryName', 'git-repository-name-peedback', 'github-validation-group', 'btn-validation-github', "커밋 할 레파지토리를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
+
+        if (!handleValidation("깃허브", "githubValidationFlag", 'github-validation-group', 'btn-validation-github')) {
+            return;
+        }
+        
+        console.log("깃허브만 사용",notionApiKey, databaseId, githubToken, username, repositoryName)
+        return;
+    } else if (tistoryUsedFlag && githubUsedFlag) {
+        //둘 다 사용
+        validateInputField(githubToken, 'githubToken', 'git-apikey-peedback', 'github-validation-group', 'btn-validation-github', "깃허브 API키를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
+        validateInputField(username, 'username', 'git-username-peedback', 'github-validation-group', 'btn-validation-github', "레파지토리 소유자를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
+        validateInputField(repositoryName, 'repositoryName', 'git-repository-name-peedback', 'github-validation-group', 'btn-validation-github', "커밋 할 레파지토리를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
+
+        if (!handleValidation("깃허브", "githubValidationFlag", 'github-validation-group', 'btn-validation-github')) {
+            return;
+        }
+
+        validateInputField(tistoryAppIDInput, 'tistoryAppIDInput', 'tistory-appid-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 App ID를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
+        validateInputField(tistorySecretKeyInput, 'tistorySecretKeyInput', 'tistory-secretkey-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Secret Key를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
+        validateInputField(tistoryBlogName, 'tistoryBlogName', 'tistory-blogname-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Blog Name을 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
+        
+        const tistoryValidationFlag = localStorage.getItem("tistoryValidationFlag");
+        if (tistoryValidationFlag != null) {
+            const isValid = tistoryValidationFlag === "true";
+            const element = document.getElementById('tistory-validation-group');
+            toggleClass(element, isValid);
+            const btnElement = document.getElementById('btn-validation-tistory');
+            toggleButtonColorClass("티스토리", btnElement, isValid);
+            if(!isValid){
+                return;
+            }
+        }
+        categoryId = getCheckedRadioButtonValue()
+        if (!handleValidation("티스토리", "tistoryValidationFlag", 'tistory-validation-group', 'btn-validation-tistory')) {
+            return;
+        }
+        console.log("둘 다 사용",notionApiKey, databaseId, githubToken, username, repositoryName, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId)
+        return;
     } else {
-        overlayText.classList.remove('visually-hidden');
+        console.log('티스토리와 깃허브 둘 다 사용하지 않습니다.');
+        const element = document.getElementById("git-tistory-validator")
+        element.style.display = "block"
+        return;
     }
 }
 
-function addTextToOverlay(newText) {
+function addTextToOverlay(text = "Loading...") {
     const overlayCenter = document.querySelector('#overlay > div');
-    
+
     // 새로운 텍스트 엘리먼트 생성
     const newTextNode = document.createElement('div');
+    newTextNode.className = 'overlay-text';
     newTextNode.style.color = 'white';
     newTextNode.style.marginTop = '10px';
-    newTextNode.textContent = newText;
+    newTextNode.textContent = text;
 
     // 센터에 위치한 div에 새로운 텍스트 엘리먼트 추가
     overlayCenter.appendChild(newTextNode);
 }
 
+function modifyTextToOverlay(newText, index) {
+    const overlayCenter = document.querySelector('#overlay > div');
+    const allTextNodes = overlayCenter.querySelectorAll('.overlay-text');
+
+    if (allTextNodes[index]) {
+        allTextNodes[index].textContent = newText;
+    } else {
+        console.error(`No text node found at index ${index}`);
+    }
+}
+
+function removeTextAtOverlayIndex(index) {
+    const overlayCenter = document.querySelector('#overlay > div');
+    const allTextNodes = overlayCenter.querySelectorAll('.overlay-text');
+
+    if (index === -1) {
+        allTextNodes.forEach(node => {
+            if (node.id !== "overlay-text") {
+                node.remove();
+            }
+        });
+    } else if (allTextNodes[index]) {
+        allTextNodes[index].remove();
+    } else {
+        console.error(`No text node found at index ${index}`);
+    }
+}
 function showOverlay(text = "Loading...") {
-    setOverlayText(text);
+    addTextToOverlay(text);
     document.getElementById('overlay').style.display = 'block';
 }
 
-function hideOverlay(text = "") {
-    setOverlayText(text);
+function hideOverlay() {
+    removeTextAtOverlayIndex(-1)
     document.getElementById('overlay').style.display = 'none';
+}
+
+function getCheckedRadioButtonValue() {
+    const container = document.getElementById('category-container');
+    const checkedButton = container.querySelector('input[name="categoryRadio"]:checked');
+    
+    if (checkedButton) {
+        return checkedButton.value;
+    } else {
+        console.error('No radio button is checked.');
+        return null;
+    }
+}
+
+function validateInputField(inputValue, inputId, feedbackId, validationGroupId, btnId, feedbackMessage, serviceName, localStorageFlagName) {
+    const element = document.getElementById(inputId);
+    const feedbackElement = document.getElementById(feedbackId);
+    const validationGroupElement = document.getElementById(validationGroupId);
+    const btnElement = document.getElementById(btnId);
+    if (!inputValue) {
+        feedbackElement.textContent = feedbackMessage;
+        toggleClass(element, false);
+        toggleClass(validationGroupElement, false);
+        toggleButtonColorClass(serviceName, btnElement, false);
+        localStorage.setItem(localStorageFlagName, false);
+        element.focus();
+        return false; // Returns false to indicate the validation failed
+    } else {
+        toggleClass(element, true);
+        return true; // Returns true to indicate the validation succeeded
+    }
+}
+
+function handleValidation(platformName, storageKey, groupElementId, btnElementId) {
+    const validationFlag = localStorage.getItem(storageKey);
+    if (validationFlag != null) {
+        const isValid = validationFlag === "true";
+        const element = document.getElementById(groupElementId);
+        toggleClass(element, isValid);
+        const btnElement = document.getElementById(btnElementId);
+        toggleButtonColorClass(platformName, btnElement, isValid);
+        if (!isValid) {
+            return false;
+        }
+    }
+    return true;
 }
