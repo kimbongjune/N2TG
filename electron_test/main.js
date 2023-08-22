@@ -9,7 +9,9 @@ const { saveGithubParameter,
     getTistoryParameter, 
     deleteGithubParameter,
     deleteNotionParameter,
-    deleteTistoryParameter 
+    deleteTistoryParameter,
+    saveTistoryAccessToken,
+    getTistoryAccessToken
 } = require('./store.js');
 
 const { Client } = require("@notionhq/client");
@@ -79,7 +81,7 @@ ipcMain.on('git-api-validation', async (event, data) => {
     console.log('Received message from renderer:', data);
 
     if (!githubToken || !username || !repositoryName) {
-        return mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다."});
+        return mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
     }
 
     try {
@@ -104,37 +106,10 @@ ipcMain.on('git-api-validation', async (event, data) => {
         }else if(error.response.status == 404){
             mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:"사용자 이름 또는 레파지토리 이름을 확인해주세요", code:404});   
         }else{
-            mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:error.message});
+            mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:error.message, code:error.status});
         }
         console.error('Error fetching data from GitHub:', error);        
         //deleteGithubParameter()
-    }
-});
-
-ipcMain.on('notion-api-renderer', async (event, data) => {
-    const { notionApiKey, databaseId } = data;
-    console.log('Received message from renderer:', data);
-
-    if (!notionApiKey || !databaseId) {
-        return res.status(400).json({ error: "required parameters." });
-    }
-
-    
-    const notion =  new Client({
-        auth: notionApiKey
-    });
-
-    initiallizeNotionToMarkdownInstance(notion);
-
-    try {
-        const data = await fetchDataFromNotion(notion, databaseId);
-        
-        const returnData = await handleNotionDataConversion(data.results[0].id, notionApiKey)
-        mainWindow.webContents.send('notion-response', returnData);
-        saveNotionParameter(notionApiKey, databaseId)
-    } catch (error) {
-        console.error('Error fetching data from GitHub:', error.message);
-        //deleteNotionParameter()
     }
 });
 
@@ -143,7 +118,7 @@ ipcMain.on('notion-api-validation', async (event, data) => {
     console.log('Received message from renderer:', data);
 
     if (!notionApiKey || !databaseId) {
-        return res.status(400).json({ error: "required parameters." });
+        return mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
     }
     
     const notion =  new Client({
@@ -162,7 +137,7 @@ ipcMain.on('notion-api-validation', async (event, data) => {
         }else if(error.status == 400){
             mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"데이터베이스 아이디를 확인해주세요", code:400});
         }
-        deleteNotionParameter()
+        //deleteNotionParameter()
     }
 });
 
@@ -171,7 +146,7 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
     console.log('Received message from renderer:', data);
 
     if (!tistoryAppIDInput || !tistorySecretKeyInput || !tistoryBlogName) {
-        return res.status(400).json({ error: "githubToken and username are required parameters." });
+        return mainWindow.webContents.send('tistory-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
     }
     
     try {
@@ -199,7 +174,6 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
             const matched = currentPageUrl.match(/code=([^&]*)/);
             if(matched){
                 const authCode = matched[1];
-                authWindow.close();
                 try {
                     const response = await getAccessToken(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, authCode);
                     console.log(response)
@@ -209,11 +183,14 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
                     if(response){
                         const tistoryWriteResponse = await readBlogCategory(response.access_token, blogName)
                         saveTistoryParameter(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName)
+                        saveTistoryAccessToken(response.access_token)
                         mainWindow.webContents.send('tistory-validation-response', {status:"success", result : tistoryWriteResponse, code:200});
                     }
+                    authWindow.close();
                 } catch (error) {
                     console.error("Error while fetching access token:", error);
                     mainWindow.webContents.send('tistory-validation-response', {status:"failed",  result:"앱아이디 혹은 시크릿키, 블로그 주소를 확인해주세요", code:400});
+                    authWindow.close();
                 }
             }
         });
@@ -224,7 +201,34 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
         
     } catch (error) {
         console.error('Error fetching data from tistory:', error.message);
-        //deleteTistoryParameter()
+        mainWindow.webContents.send('tistory-validation-response', {status:"failed",  result:error.message, code:error.status});
+    }
+});
+
+ipcMain.on('notion-api-renderer', async (event, data) => {
+    const { notionApiKey, databaseId } = data;
+    console.log('Received message from renderer:', data);
+
+    if (!notionApiKey || !databaseId) {
+        return res.status(400).json({ error: "required parameters." });
+    }
+
+    
+    const notion =  new Client({
+        auth: notionApiKey
+    });
+
+    initiallizeNotionToMarkdownInstance(notion);
+
+    try {
+        const data = await fetchDataFromNotion(notion, databaseId);
+        
+        const returnData = await handleNotionDataConversion(data.results[0].id, notionApiKey)
+        mainWindow.webContents.send('notion-response', returnData);
+        saveNotionParameter(notionApiKey, databaseId)
+    } catch (error) {
+        console.error('Error fetching data from GitHub:', error.message);
+        //deleteNotionParameter()
     }
 });
 
@@ -293,6 +297,84 @@ ipcMain.on('tistory-api-renderer', async (event, data) => {
     }
 });
 
+ipcMain.on('publish-tistory', async (event, data) => {
+    const { notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId } = data
+    if (!notionApiKey || !databaseId) {
+        return mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+    if (!tistoryAppIDInput || !tistorySecretKeyInput || !tistoryBlogName) {
+        return mainWindow.webContents.send('tistory-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+
+    console.log('publish-tistory', notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId);
+
+    const notion =  new Client({
+        auth: notionApiKey
+    });
+
+    initiallizeNotionToMarkdownInstance(notion);
+
+    try {
+        const data = await fetchDataFromNotion(notion, databaseId);
+        if(data.results.length <= 0){
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:200});
+        }
+        const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey);
+        const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
+        const accessToken = getTistoryAccessToken()
+        const match = tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
+        const blogName = match ? match[1] : null;
+        if(accessToken){
+            const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, htmlData.title, htmlData.html, tags, categoryId)
+            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료")
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:tistoryWriteResponse, code:200});
+        }else{
+            mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:"티스토리 액세스 키 재발급이 필요합니다.", code:400});
+        }
+    } catch (error) {
+        //노션 데이터 수신 및 html 변환중 발생한 에러
+        console.log(error.message)
+        return mainWindow.webContents.send('publish-response', {status:"failed", witch:"notion", result:error.message, code:error.status});
+    }
+})
+
+ipcMain.on('publish-github', async (event, data) => {
+    const { notionApiKey, databaseId, githubToken, username, repositoryName } = data
+    if (!notionApiKey || !databaseId) {
+        return mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+    if (!githubToken || !username || !repositoryName) {
+        return mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+
+    console.log('publish-github', notionApiKey, databaseId, githubToken, username, repositoryName);
+
+    const notion =  new Client({
+        auth: notionApiKey
+    });
+
+    initiallizeNotionToMarkdownInstance(notion);
+
+    try {
+        const data = await fetchDataFromNotion(notion, databaseId);
+        if(data.results.length <= 0){
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:200});
+        }
+        const mdString = await convertToMarkdown(data.results[0].id);
+        const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}.md`, mdString.parent, `${getFormattedDate()}.md created`, githubToken)
+        if(prUrl){
+            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료")
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"github", result:prUrl, code:200});
+        }else{
+            mainWindow.webContents.send('publish-response', {status:"failed", witch:"github",  result:"pr이 생성되지 않았습니다.", code:400});
+        }
+    } catch (error) {
+        //노션 데이터 수신 및 html 변환중 발생한 에러
+        console.log(error.message)
+        return mainWindow.webContents.send('publish-response', {status:"failed", witch:"notion", result:error.message, code:error.status});
+    }
+})
+
 app.on('ready', createWindow);
 
 app.on('window-all-closed', () => {
@@ -310,17 +392,15 @@ app.on('activate', () => {
 //티스토리 블로그 글 작성 함수
 const writeBlogContent = async(token, blogName, title, content, tag, categoryId = 0) =>{
     try {
-        const response = await axios.post("https://www.tistory.com/apis/post/write", null, { 
-            params: {
-                access_token : token,
-                output : "json",
-                blogName : blogName,
-                visibility : 3,
-                title : title,
-                content : content,
-                category : categoryId,
-                tag : tag
-            } 
+        const response = await axios.post("https://www.tistory.com/apis/post/write", {
+            access_token : token,
+            output : "json",
+            blogName : blogName,
+            visibility : 3,
+            title : title,
+            content : content,
+            category : categoryId,
+            tag : tag
         });
         return response.data;
     } catch (error) {
@@ -392,14 +472,14 @@ const fetchDataFromNotion = async (notion, databaseId) => {
 };
 
 //게시글 발행이 끝난 후 상태를 업데이트 하는 함수
-const updatePageStatusToPublished = async (notion, pageId) => {
+const updatePageStatusToPublished = async (notion, pageId, status) => {
     try {
         const response = await notion.pages.update({
             page_id: pageId,
             properties: {
                 "상태": {
                     select: {
-                        name: "발행 완료"
+                        name: status
                     }
                 }
             }
@@ -506,10 +586,9 @@ async function commitFile(username, repositoryName, fileName, fileContent, branc
             }
         });
     } catch (error) {
-        throw { status: "failed", result: "Error committing file on GitHub", code: error.response.status };
+        throw { status: "failed", result: error.message, code: error.response.status };
     }
 }
-
 
 //PR을 생성하는 함수
 async function createPullRequest(username, repositoryName, prTitle, sourceBranch, targetBranch, githubToken) {
@@ -534,7 +613,7 @@ async function processGithubActions(username, repositoryName, filePath, fileCont
     try {
         const lastCommitSHA = await getLastCommitSHA(username, repositoryName, githubToken);
         
-        const newBranchName = 'new-branch-name'; 
+        const newBranchName = `${getFormattedDate()}_TIL`; 
         await createBranch(username, repositoryName, newBranchName, lastCommitSHA, githubToken);
         
         await commitFile(username, repositoryName, filePath, fileContent, newBranchName, githubToken);
