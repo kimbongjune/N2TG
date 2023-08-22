@@ -59,6 +59,16 @@ const deleteTistoryParameter = () => {
     store.delete("tistoryParameter");
 }
 
+//티스토리 액세스토큰을 저장하는 함수
+const saveTistoryAccessToken = (accessToken) =>{
+    store.set('accessToken',accessToken)
+}
+
+//티스토리 API 사용 파라미터를 가져오는 함수
+const getTistoryAccessToken = () =>{
+    return store.get("accessToken")
+}
+
 module.exports = {
     saveGithubParameter,
     getGithubParameter,
@@ -68,5 +78,7 @@ module.exports = {
     getTistoryParameter,
     deleteGithubParameter,
     deleteNotionParameter,
-    deleteTistoryParameter
+    deleteTistoryParameter,
+    saveTistoryAccessToken,
+    getTistoryAccessToken
 };
