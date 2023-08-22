@@ -149,6 +149,10 @@ window.electron.ipcRenderer.on('tistory-response', (data) => {
     container.innerHTML = JSON.stringify(data, null, 2);
 });
 
+window.electron.ipcRenderer.on('publish-response', (data) => {
+    console.log(data)
+})
+
 function fetchGithubData() {
     const githubToken = document.getElementById('githubToken').value;
     const username = document.getElementById('username').value;
@@ -513,6 +517,7 @@ function postData(){
         }
         categoryId = getCheckedRadioButtonValue()
         console.log("티스토리만 사용",notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput,tistoryBlogName, categoryId)
+        window.electron.ipcRenderer.send('publish-tistory', { notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId });
         return;
     } else if (!tistoryUsedFlag && githubUsedFlag) {
         //깃허브만 사용
@@ -525,6 +530,8 @@ function postData(){
         }
         
         console.log("깃허브만 사용",notionApiKey, databaseId, githubToken, username, repositoryName)
+        window.electron.ipcRenderer.send('publish-github', { notionApiKey, databaseId, githubToken, username, repositoryName });
+
         return;
     } else if (tistoryUsedFlag && githubUsedFlag) {
         //둘 다 사용
@@ -624,7 +631,7 @@ function getCheckedRadioButtonValue() {
         return checkedButton.value;
     } else {
         console.error('No radio button is checked.');
-        return null;
+        return 0;
     }
 }
 
