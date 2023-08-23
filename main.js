@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const axios = require('axios');
 const path = require('path');
 const { saveGithubParameter, 
@@ -76,6 +76,10 @@ function createWindow() {
     });
 }
 
+ipcMain.on('open-link', (event, url) => {
+    shell.openExternal(url);
+});
+
 ipcMain.on('git-api-validation', async (event, data) => {
     const { githubToken, username, repositoryName } = data;
     console.log('Received message from renderer:', data);
@@ -136,6 +140,8 @@ ipcMain.on('notion-api-validation', async (event, data) => {
             mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"노션 API키 값을 확인해주세요", code:401});
         }else if(error.status == 400){
             mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"데이터베이스 아이디를 확인해주세요", code:400});
+        }else{
+            mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:`알 수 없는 에러 ${error.message}`, code:400});
         }
         //deleteNotionParameter()
     }
@@ -195,8 +201,10 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
             }
         });
         
-        authWindow.on('closed', () => {
-            authWindow = null;
+        authWindow.on('closed', async () => {
+            await mainWindow.webContents.executeJavaScript(`
+                document.getElementById('overlay').style.display = 'none';
+            `);
         });
         
     } catch (error) {
@@ -317,24 +325,23 @@ ipcMain.on('publish-tistory', async (event, data) => {
     try {
         const data = await fetchDataFromNotion(notion, databaseId);
         if(data.results.length <= 0){
-            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:200});
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
         }
-        const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey);
+        const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey, mainWindow);
         const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
         const accessToken = getTistoryAccessToken()
-        const match = tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
-        const blogName = match ? match[1] : null;
         if(accessToken){
+            mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
+            const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
+            const blogName = match ? match[1] : null;
             const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, htmlData.title, htmlData.html, tags, categoryId)
-            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료")
-            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:tistoryWriteResponse, code:200});
+            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", null, tistoryWriteResponse.tistory.url)
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"프로세스가 정상적으로 완료되었습니다.", code:200, tistoryLink:tistoryWriteResponse.tistory.url});
         }else{
-            mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:"티스토리 액세스 키 재발급이 필요합니다.", code:400});
+            return mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:"티스토리 액세스 키 재발급이 필요합니다.", code:400});
         }
     } catch (error) {
-        //노션 데이터 수신 및 html 변환중 발생한 에러
-        console.log(error.message)
-        return mainWindow.webContents.send('publish-response', {status:"failed", witch:"notion", result:error.message, code:error.status});
+        return mainWindow.webContents.send('publish-response', error);
     }
 })
 
@@ -357,21 +364,19 @@ ipcMain.on('publish-github', async (event, data) => {
 
     try {
         const data = await fetchDataFromNotion(notion, databaseId);
+        mainWindow.webContents.send('publish-response', {status:"doing", witch:"test", result:data, code:201});
         if(data.results.length <= 0){
-            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:200});
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
         }
-        const mdString = await convertToMarkdown(data.results[0].id);
+        const mdString = await convertToMarkdown(data.results[0].id, mainWindow);
         const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}.md`, mdString.parent, `${getFormattedDate()}.md created`, githubToken)
         if(prUrl){
-            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료")
-            return mainWindow.webContents.send('publish-response', {status:"success", witch:"github", result:prUrl, code:200});
-        }else{
-            mainWindow.webContents.send('publish-response', {status:"failed", witch:"github",  result:"pr이 생성되지 않았습니다.", code:400});
+            mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request생성이 완료되었습니다.", code:201});
+            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", prUrl)
+            return mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"프로세스가 정상적으로 완료되었습니다.", code:200, gitLink:prUrl});
         }
     } catch (error) {
-        //노션 데이터 수신 및 html 변환중 발생한 에러
-        console.log(error.message)
-        return mainWindow.webContents.send('publish-response', {status:"failed", witch:"notion", result:error.message, code:error.status});
+        return mainWindow.webContents.send('publish-response', error);
     }
 })
 
@@ -391,6 +396,7 @@ app.on('activate', () => {
 
 //티스토리 블로그 글 작성 함수
 const writeBlogContent = async(token, blogName, title, content, tag, categoryId = 0) =>{
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"tistory", result:"게시글 작성 진행중입니다.", code:201});
     try {
         const response = await axios.post("https://www.tistory.com/apis/post/write", {
             access_token : token,
@@ -404,7 +410,7 @@ const writeBlogContent = async(token, blogName, title, content, tag, categoryId 
         });
         return response.data;
     } catch (error) {
-        throw error;
+        throw { status: "failed", witch:"tistory", result: `티스토리 게시글 작성 과정에서 실패하였습니다. ${error.message}`, code: 400 };
     }
 }
 
@@ -444,6 +450,7 @@ const getAccessToken = async(clientId, clientSecret, redirectUri, code) =>{
 
 //노션 API 요청 함수
 const fetchDataFromNotion = async (notion, databaseId) => {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"notion", result:"노션 게시글을 수신중입니다.", code:201});
     try {
         const response = await notion.databases.query({
             database_id: databaseId,
@@ -464,7 +471,6 @@ const fetchDataFromNotion = async (notion, databaseId) => {
                 ]
             }
         });
-
         return response;
     } catch (error) {
         throw error;
@@ -472,7 +478,8 @@ const fetchDataFromNotion = async (notion, databaseId) => {
 };
 
 //게시글 발행이 끝난 후 상태를 업데이트 하는 함수
-const updatePageStatusToPublished = async (notion, pageId, status) => {
+const updatePageStatusToPublished = async (notion, pageId, status, gitPrUrl=null, tistoryPostingUrl=null) => {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"notion", result:"프로세스가 정상적으로 완료되어 노션 게시글 업데이트 중 입니다.", code:201});
     try {
         const response = await notion.pages.update({
             page_id: pageId,
@@ -481,6 +488,12 @@ const updatePageStatusToPublished = async (notion, pageId, status) => {
                     select: {
                         name: status
                     }
+                },
+                "깃허브 PR 링크":{
+                    url : gitPrUrl
+                },
+                "티스토리 포스팅 링크" :{
+                    url : tistoryPostingUrl
                 }
             }
         });
@@ -513,9 +526,9 @@ const clickAcceptButton = async (webContents) => {
 
 //노션 데이터를 markdown 파일로 변환하고, html파일로 변환 및 저장하는 함수
 const handleNotionDataConversion = async(pageId, notionApiKey) =>{
-    const mdString = await convertToMarkdown(pageId);
+    const mdString = await convertToMarkdown(pageId, mainWindow);
     await saveMarkdownFile(mdString);
-    const htmlData = await convertNotionDataToHtml(pageId, notionApiKey);
+    const htmlData = await convertNotionDataToHtml(pageId, notionApiKey, mainWindow);
     await saveHtmlFile(htmlData);
 
     return htmlData.html
@@ -523,6 +536,7 @@ const handleNotionDataConversion = async(pageId, notionApiKey) =>{
 
 //만약 커밋 해시가 존재하지 않는다면 첫 커밋을 발생시키고 해당 값을 리턴시킴
 async function createInitialCommit(username, repositoryName, githubToken) {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"커밋 해시코드가 존재하지 않아 새로운 커밋을 생성중입니다.", code:201});
     try {
         const response = await axios.put(`https://api.github.com/repos/${username}/${repositoryName}/contents/README.md`, {
             message: 'Initial commit',
@@ -535,13 +549,18 @@ async function createInitialCommit(username, repositoryName, githubToken) {
 
         return response.data.commit.sha;
     } catch (error) {
-        console.error('Error creating initial commit:', error);
-        throw error;
+        
+        if (error.response && error.response.status === 404) {
+            throw { status: "failed", witch:"github", result: `첫번째 커밋 생성중 실패하였습니다. 레파지토리 이름을 확인해주세요. ${error.message}`, code: error.response.status };
+        }else{
+            throw { status: "failed", witch:"github", result: `첫번째 커밋 생성중 실패하였습니다. ${error.message}`, code: error.response.status };
+        }
     }
 }
 
 //깃허브의 브랜치를 새로 생성하기위해 최신 커밋의 SHA를 가져오기 위한 함수
 async function getLastCommitSHA(username, repositoryName, githubToken) {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"커밋 해시코드를 수신중입니다.", code:201});
     try {
         const response = await axios.get(`https://api.github.com/repos/${username}/${repositoryName}/branches/main`, {
             headers: {
@@ -553,12 +572,13 @@ async function getLastCommitSHA(username, repositoryName, githubToken) {
         if (error.response && error.response.status === 404) {
             return await createInitialCommit(username, repositoryName, githubToken);
         }
-        throw { status: "failed", result: "Error fetching branch data from GitHub", code: error.response.status };
+        throw { status: "failed", witch:"github", result: `커밋의 sha 코드를 가져오는데 실패하였습니다. ${error.message}`, code: error.response.status };
     }
 }
 
 //브런치를 생성하는 함수.
 async function createBranch(username, repositoryName, branchName, lastCommitSHA, githubToken) {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"새로운 브런치를 생성중입니다.", code:201});
     try {
         await axios.post(`https://api.github.com/repos/${username}/${repositoryName}/git/refs`, {
             ref: `refs/heads/${branchName}`,
@@ -569,12 +589,13 @@ async function createBranch(username, repositoryName, branchName, lastCommitSHA,
             }
         });
     } catch (error) {
-        throw { status: "failed", result: "Error creating branch on GitHub", code: error.response.status };
+        throw { status: "failed", witch:"github", result: `브런치 생성중 실패하였습니다. ${error.message}`, code: error.response.status };
     }
 }
 
 //md파일을 이용해 커밋을 발생시키는 함수
 async function commitFile(username, repositoryName, fileName, fileContent, branchName, githubToken) {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"TIL md파일을 커밋중입니다.", code:201});
     try {
         await axios.put(`https://api.github.com/repos/${username}/${repositoryName}/contents/${fileName}`, {
             message: `${getFormattedDate()}_TIL`,
@@ -586,12 +607,13 @@ async function commitFile(username, repositoryName, fileName, fileContent, branc
             }
         });
     } catch (error) {
-        throw { status: "failed", result: error.message, code: error.response.status };
+        throw { status: "failed", witch:"github", result: `커밋에 실패하였습니다. ${error.message}`, code: error.response.status };
     }
 }
 
 //PR을 생성하는 함수
 async function createPullRequest(username, repositoryName, prTitle, sourceBranch, targetBranch, githubToken) {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request를 생성중입니다.", code:201});
     try {
         const response = await axios.post(`https://api.github.com/repos/${username}/${repositoryName}/pulls`, {
             title: prTitle,
@@ -604,7 +626,7 @@ async function createPullRequest(username, repositoryName, prTitle, sourceBranch
         });
         return response.data.html_url;
     } catch (error) {
-        throw { status: "failed", result: "Error creating pull request on GitHub", code: error.response.status };
+        throw { status: "failed", witch:"github", result: `풀 리퀘스트를 생성하는데 실패하였습니다. ${error.message}`, code: error.response.status };
     }
 }
 
@@ -612,7 +634,6 @@ async function createPullRequest(username, repositoryName, prTitle, sourceBranch
 async function processGithubActions(username, repositoryName, filePath, fileContent, prTitle, githubToken) {
     try {
         const lastCommitSHA = await getLastCommitSHA(username, repositoryName, githubToken);
-        
         const newBranchName = `${getFormattedDate()}_TIL`; 
         await createBranch(username, repositoryName, newBranchName, lastCommitSHA, githubToken);
         
@@ -624,6 +645,6 @@ async function processGithubActions(username, repositoryName, filePath, fileCont
         return prURL;  // PR의 URL을 반환합니다.
         
     } catch (error) {
-        return error;
+        throw error;
     }
 }

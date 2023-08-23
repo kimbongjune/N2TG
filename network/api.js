@@ -151,6 +151,39 @@ window.electron.ipcRenderer.on('tistory-response', (data) => {
 
 window.electron.ipcRenderer.on('publish-response', (data) => {
     console.log(data)
+    if(data.witch == "github"){
+        if(data.code == 200){
+            hideOverlay()
+            showModal("PR 생성 완료", "PR 생성이 완료되었습니다.",data.gitLink)
+        }else if(data.code == 201){
+            addTextToOverlay(data.result)
+        }else{
+            hideOverlay()
+            showModal("에러가 발생하였습니다.", data.result)
+        }
+    }else if(data.witch == "tistory"){
+        if(data.code == 200){
+            hideOverlay()
+            showModal("티스토리 게시글 작성 완료", "티스토리 게시글 작성이 완료되었습니다.", null, data.tistoryLink)
+        }else if(data.code == 201){
+            addTextToOverlay(data.result)
+        }else{
+            hideOverlay()
+            showModal("에러가 발생하였습니다.", data.result)
+        }
+
+    }else if(data.witch == "all"){
+        
+    }else{
+        if(data.code == 200){
+            hideOverlay()
+        }else if(data.code == 201){
+            addTextToOverlay(data.result)
+        }else if(data.code == 403){
+            hideOverlay()
+            showModal("발행 할 게시글이 없습니다.", "노션 게시글의 \"상태\"를 체크해주세요")
+        }
+    }
 })
 
 function fetchGithubData() {
@@ -469,7 +502,6 @@ function handleRadioChange(event) {
 }
 
 function postData(){
-
     const tistoryUsedFlag = document.getElementById('tistory-used-flag').checked;
     const githubUsedFlag = document.getElementById('github-used-flag').checked;
 
@@ -496,6 +528,7 @@ function postData(){
 
     if (tistoryUsedFlag && !githubUsedFlag) {
         //티스토리만 사용
+        showOverlay("티스토리 게시글 포스팅 전 전 검증을 진행중입니다...")
         validateInputField(tistoryAppIDInput, 'tistoryAppIDInput', 'tistory-appid-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 App ID를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
         validateInputField(tistorySecretKeyInput, 'tistorySecretKeyInput', 'tistory-secretkey-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Secret Key를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
         validateInputField(tistoryBlogName, 'tistoryBlogName', 'tistory-blogname-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Blog Name을 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
@@ -521,6 +554,7 @@ function postData(){
         return;
     } else if (!tistoryUsedFlag && githubUsedFlag) {
         //깃허브만 사용
+        showOverlay("깃허브 커밋 생성 전 검증을 진행중입니다...")
         validateInputField(githubToken, 'githubToken', 'git-apikey-peedback', 'github-validation-group', 'btn-validation-github', "깃허브 API키를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
         validateInputField(username, 'username', 'git-username-peedback', 'github-validation-group', 'btn-validation-github', "레파지토리 소유자를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
         validateInputField(repositoryName, 'repositoryName', 'git-repository-name-peedback', 'github-validation-group', 'btn-validation-github', "커밋 할 레파지토리를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
@@ -667,4 +701,43 @@ function handleValidation(platformName, storageKey, groupElementId, btnElementId
         }
     }
     return true;
+}
+
+var myModal = new bootstrap.Modal(document.getElementById('exampleModal'), {
+    keyboard: false
+})
+
+const showModal = (title, body, link1=null, link2=null) =>{
+    const titleElement = document.getElementById('exampleModalLabel')
+    titleElement.textContent = title;
+    
+    const bodyElement = document.getElementById('modal-body')
+    bodyElement.textContent = body;
+
+    if(link1 != null){
+        const linkElement = document.createElement('a');
+        linkElement.href = link1;
+        linkElement.textContent = 'PR 링크';
+        linkElement.onclick = (e) => {
+            e.preventDefault();
+            window.electron.ipcRenderer.send('open-link', link1);
+        };
+        bodyElement.appendChild(linkElement);
+    }
+    
+    if(link2 != null){
+        const linkElement = document.createElement('a');
+        linkElement.href = link2;
+        linkElement.textContent = '티스토리 링크';
+        linkElement.onclick = (e) => {
+            e.preventDefault();
+            window.electron.ipcRenderer.send('open-link', link2);
+        };
+        bodyElement.appendChild(linkElement);
+    }
+    myModal.show()
+}
+
+const hideModal = () => {
+    myModal.hide()
 }

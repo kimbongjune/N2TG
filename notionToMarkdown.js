@@ -11,7 +11,8 @@ function initiallizeNotionToMarkdownInstance(notionClient) {
 }
 
 //
-async function convertToMarkdown(pageId) {
+async function convertToMarkdown(pageId, mainWindow) {
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"노션 텍스트를 markdown으로 변환중입니다.", code:201});
     const mdblocks = await n2m.pageToMarkdown(pageId);
     return await n2m.toMarkdownString(mdblocks);
 }
