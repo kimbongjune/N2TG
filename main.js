@@ -17,7 +17,7 @@ const { saveGithubParameter,
 const { Client } = require("@notionhq/client");
 const {initiallizeNotionToMarkdownInstance, convertToMarkdown} = require('./notionToMarkdown.js'); 
 const convertNotionDataToHtml = require('./notionToHtml');
-const {getFormattedDate, saveMarkdownFile, saveHtmlFile, encodingToBase64} = require("./utils.js")
+const {getFormattedDate, saveMarkdownFile, saveHtmlFile, getCurrentTime} = require("./utils.js")
 
 let mainWindow;
 
@@ -213,98 +213,6 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
     }
 });
 
-ipcMain.on('notion-api-renderer', async (event, data) => {
-    const { notionApiKey, databaseId } = data;
-    console.log('Received message from renderer:', data);
-
-    if (!notionApiKey || !databaseId) {
-        return res.status(400).json({ error: "required parameters." });
-    }
-
-    
-    const notion =  new Client({
-        auth: notionApiKey
-    });
-
-    initiallizeNotionToMarkdownInstance(notion);
-
-    try {
-        const data = await fetchDataFromNotion(notion, databaseId);
-        
-        const returnData = await handleNotionDataConversion(data.results[0].id, notionApiKey)
-        mainWindow.webContents.send('notion-response', returnData);
-        saveNotionParameter(notionApiKey, databaseId)
-    } catch (error) {
-        console.error('Error fetching data from GitHub:', error.message);
-        //deleteNotionParameter()
-    }
-});
-
-ipcMain.on('tistory-api-renderer', async (event, data) => {
-    const { tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName} = data;
-    console.log('Received message from renderer:', data);
-
-    if (!tistoryAppIDInput || !tistorySecretKeyInput || !tistoryBlogName) {
-        return res.status(400).json({ error: "githubToken and username are required parameters." });
-    }
-    
-    try {
-        const authUrl = `https://www.tistory.com/oauth/authorize?client_id=${tistoryAppIDInput}&redirect_uri=${tistoryBlogName}&response_type=code`;
-
-        let authWindow = new BrowserWindow({
-            show: true, // 이 설정을 통해 창을 숨깁니다.
-            webPreferences: {
-                nodeIntegration: false
-            }
-        });
-        authWindow.loadURL(authUrl);
-        authWindow.webContents.on('did-finish-load', async () => {
-            const currentPageUrl = await authWindow.webContents.executeJavaScript('window.location.href');
-
-            console.log('Current page URL:', currentPageUrl);
-            if(currentPageUrl.includes("auth/login")){
-                await clickTisotoryLoginByKakaoButton(authWindow.webContents);
-            }
-
-            if(currentPageUrl.includes("oauth/authorize")){
-                await clickAcceptButton(authWindow.webContents);
-            }
-            
-            const matched = currentPageUrl.match(/code=([^&]*)/);
-            if(matched){
-                const authCode = matched[1];
-                authWindow.close();
-                try {
-                    const accessToken = await getAccessToken(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, authCode);
-                    mainWindow.webContents.send('tistory-response', accessToken);
-                    const match = currentPageUrl.match(/https:\/\/(.*?)\.tistory\.com\//);
-                    const blogName = match ? match[1] : null;
-                    //console.log(blogName); 
-                    const testContent = `<h1>제목</h1>
-                    <p>이것은 본문의 첫 번째 문단입니다.</p>
-                    <p>이것은 본문의 두 번째 문단입니다.</p>`
-                    if(accessToken){
-                        const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, "테스트 게시물", testContent, "java")
-                        saveTistoryParameter(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName)
-                        mainWindow.webContents.send('tistory-response', tistoryWriteResponse);
-                    }
-                } catch (error) {
-                    console.error("Error while fetching access token:", error);
-                    mainWindow.webContents.send('tistory-response', error);
-                }
-            }
-        });
-        
-        authWindow.on('closed', () => {
-            authWindow = null;
-        });
-        
-    } catch (error) {
-        console.error('Error fetching data from tistory:', error.message);
-        deleteTistoryParameter()
-    }
-});
-
 ipcMain.on('publish-tistory', async (event, data) => {
     const { notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId } = data
     if (!notionApiKey || !databaseId) {
@@ -331,10 +239,11 @@ ipcMain.on('publish-tistory', async (event, data) => {
         const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
         const accessToken = getTistoryAccessToken()
         if(accessToken){
+            const title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
             mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
             const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
             const blogName = match ? match[1] : null;
-            const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, htmlData.title, htmlData.html, tags, categoryId)
+            const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, title, htmlData.html, tags, categoryId)
             await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", null, tistoryWriteResponse.tistory.url)
             return mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"프로세스가 정상적으로 완료되었습니다.", code:200, tistoryLink:tistoryWriteResponse.tistory.url});
         }else{
@@ -364,16 +273,67 @@ ipcMain.on('publish-github', async (event, data) => {
 
     try {
         const data = await fetchDataFromNotion(notion, databaseId);
-        mainWindow.webContents.send('publish-response', {status:"doing", witch:"test", result:data, code:201});
         if(data.results.length <= 0){
             return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
         }
+        const title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
         const mdString = await convertToMarkdown(data.results[0].id, mainWindow);
-        const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}.md`, mdString.parent, `${getFormattedDate()}.md created`, githubToken)
+        const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}_${title}.md`, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
         if(prUrl){
             mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request생성이 완료되었습니다.", code:201});
             await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", prUrl)
             return mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"프로세스가 정상적으로 완료되었습니다.", code:200, gitLink:prUrl});
+        }
+    } catch (error) {
+        return mainWindow.webContents.send('publish-response', error);
+    }
+})
+
+ipcMain.on('publish-all', async (event, data) => {
+    const { notionApiKey, databaseId, githubToken, username, repositoryName, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId } = data
+    if (!notionApiKey || !databaseId) {
+        return mainWindow.webContents.send('notion-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+    if (!githubToken || !username || !repositoryName) {
+        return mainWindow.webContents.send('git-api-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+    if (!tistoryAppIDInput || !tistorySecretKeyInput || !tistoryBlogName) {
+        return mainWindow.webContents.send('tistory-validation-response', {status:"failed",  result:"필수 파라미터가 없습니다.", code:404});
+    }
+
+    console.log('publish-all', notionApiKey, databaseId, githubToken, username, repositoryName, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId);
+
+    const notion =  new Client({
+        auth: notionApiKey
+    });
+
+    initiallizeNotionToMarkdownInstance(notion);
+
+    try {
+        const data = await fetchDataFromNotion(notion, databaseId);
+        if(data.results.length <= 0){
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
+        }
+        const title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
+        const mdString = await convertToMarkdown(data.results[0].id, mainWindow);
+        const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}_${title}.md`, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
+        if(prUrl){
+            mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request생성이 완료되었습니다.", code:201});
+            mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"깃허브 PR 생성이 완료되었습니다", code:201});
+
+            const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey, mainWindow);
+            const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
+            const accessToken = getTistoryAccessToken()
+            if(accessToken){
+                mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
+                const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
+                const blogName = match ? match[1] : null;
+                const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, title, htmlData.html, tags, categoryId)
+                await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", prUrl, tistoryWriteResponse.tistory.url)
+                return mainWindow.webContents.send('publish-response', {status:"success", witch:"all", result:"프로세스가 정상적으로 완료되었습니다.", code:200, gitLink:prUrl, tistoryLink:tistoryWriteResponse.tistory.url});
+            }else{
+                return mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:"티스토리 액세스 키 재발급이 필요합니다.", code:400});
+            }
         }
     } catch (error) {
         return mainWindow.webContents.send('publish-response', error);
@@ -598,7 +558,7 @@ async function commitFile(username, repositoryName, fileName, fileContent, branc
     mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"TIL md파일을 커밋중입니다.", code:201});
     try {
         await axios.put(`https://api.github.com/repos/${username}/${repositoryName}/contents/${fileName}`, {
-            message: `${getFormattedDate()}_TIL`,
+            message: `${getCurrentTime()}_TIL`,
             content: Buffer.from(fileContent).toString('base64'),
             branch: branchName
         }, {
@@ -634,7 +594,7 @@ async function createPullRequest(username, repositoryName, prTitle, sourceBranch
 async function processGithubActions(username, repositoryName, filePath, fileContent, prTitle, githubToken) {
     try {
         const lastCommitSHA = await getLastCommitSHA(username, repositoryName, githubToken);
-        const newBranchName = `${getFormattedDate()}_TIL`; 
+        const newBranchName = `${getCurrentTime()}_TIL`; 
         await createBranch(username, repositoryName, newBranchName, lastCommitSHA, githubToken);
         
         await commitFile(username, repositoryName, filePath, fileContent, newBranchName, githubToken);

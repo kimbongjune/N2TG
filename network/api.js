@@ -171,17 +171,25 @@ window.electron.ipcRenderer.on('publish-response', (data) => {
             hideOverlay()
             showModal("에러가 발생하였습니다.", data.result)
         }
-
     }else if(data.witch == "all"){
-        
+        if(data.code == 200){
+            hideOverlay()
+            showModal("티스토리 게시글 작성 및 깃허브 PR 생성 완료", "티스토리 게시글 작성 및 깃허브 PR 생성이 완료되었습니다.", data.gitLink, data.tistoryLink)
+        }else if(data.code == 201){
+            addTextToOverlay(data.result)
+        }else{
+            hideOverlay()
+            showModal("에러가 발생하였습니다.", data.result)
+        }
     }else{
         if(data.code == 200){
             hideOverlay()
         }else if(data.code == 201){
             addTextToOverlay(data.result)
+            console.log(data)
         }else if(data.code == 403){
             hideOverlay()
-            showModal("발행 할 게시글이 없습니다.", "노션 게시글의 \"상태\"를 체크해주세요")
+            showModal("발행 할 게시글이 없습니다.", "노션에 \"발행요청\" 혹은 \"오류\" 상태의 게시글이 없습니다.")
         }
     }
 })
@@ -528,7 +536,6 @@ function postData(){
 
     if (tistoryUsedFlag && !githubUsedFlag) {
         //티스토리만 사용
-        showOverlay("티스토리 게시글 포스팅 전 전 검증을 진행중입니다...")
         validateInputField(tistoryAppIDInput, 'tistoryAppIDInput', 'tistory-appid-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 App ID를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
         validateInputField(tistorySecretKeyInput, 'tistorySecretKeyInput', 'tistory-secretkey-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Secret Key를 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
         validateInputField(tistoryBlogName, 'tistoryBlogName', 'tistory-blogname-peedback', 'tistory-validation-group', 'btn-validation-tistory', "티스토리 Blog Name을 입력하세요. 공백은 입력할 수 없습니다.", "티스토리", "tistoryValidationFlag");
@@ -549,12 +556,12 @@ function postData(){
             return;
         }
         categoryId = getCheckedRadioButtonValue()
+        showOverlay("티스토리 게시글 포스팅중입니다...")
         console.log("티스토리만 사용",notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput,tistoryBlogName, categoryId)
         window.electron.ipcRenderer.send('publish-tistory', { notionApiKey, databaseId, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId });
         return;
     } else if (!tistoryUsedFlag && githubUsedFlag) {
         //깃허브만 사용
-        showOverlay("깃허브 커밋 생성 전 검증을 진행중입니다...")
         validateInputField(githubToken, 'githubToken', 'git-apikey-peedback', 'github-validation-group', 'btn-validation-github', "깃허브 API키를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
         validateInputField(username, 'username', 'git-username-peedback', 'github-validation-group', 'btn-validation-github', "레파지토리 소유자를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
         validateInputField(repositoryName, 'repositoryName', 'git-repository-name-peedback', 'github-validation-group', 'btn-validation-github', "커밋 할 레파지토리를 입력하세요. 공백은 입력할 수 없습니다.", "깃허브", "githubValidationFlag");
@@ -563,6 +570,7 @@ function postData(){
             return;
         }
         
+        showOverlay("깃허브 PR 생성중입니다...")
         console.log("깃허브만 사용",notionApiKey, databaseId, githubToken, username, repositoryName)
         window.electron.ipcRenderer.send('publish-github', { notionApiKey, databaseId, githubToken, username, repositoryName });
 
@@ -596,7 +604,9 @@ function postData(){
         if (!handleValidation("티스토리", "tistoryValidationFlag", 'tistory-validation-group', 'btn-validation-tistory')) {
             return;
         }
-        console.log("둘 다 사용",notionApiKey, databaseId, githubToken, username, repositoryName, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId)
+        showOverlay("티스토리 게시글 포스팅 및 깃허브 PR 생성중입니다...")
+        window.electron.ipcRenderer.send('publish-all', {notionApiKey, databaseId, githubToken, username, repositoryName, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId });
+        //console.log("둘 다 사용",notionApiKey, databaseId, githubToken, username, repositoryName, tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, categoryId)
         return;
     } else {
         console.log('티스토리와 깃허브 둘 다 사용하지 않습니다.');
@@ -715,6 +725,8 @@ const showModal = (title, body, link1=null, link2=null) =>{
     bodyElement.textContent = body;
 
     if(link1 != null){
+        const br = document.createElement('br'); // <br> 태그 생성
+        bodyElement.appendChild(br);
         const linkElement = document.createElement('a');
         linkElement.href = link1;
         linkElement.textContent = 'PR 링크';
@@ -726,6 +738,8 @@ const showModal = (title, body, link1=null, link2=null) =>{
     }
     
     if(link2 != null){
+        const br = document.createElement('br'); // <br> 태그 생성
+        bodyElement.appendChild(br);
         const linkElement = document.createElement('a');
         linkElement.href = link2;
         linkElement.textContent = '티스토리 링크';
