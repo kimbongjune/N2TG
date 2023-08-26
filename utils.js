@@ -1,4 +1,7 @@
 const fs = require('fs');
+const FormData = require('form-data');
+const axios = require('axios');
+const { Readable } = require('stream');
 
 //오늘 날짜를 yyyy-mm-dd_hhMM 형식으로 변환하는 함수
 const getFormattedDate = () => {
@@ -44,9 +47,46 @@ const getCurrentTime = () =>{
     return `${year}${month}${day}_${hours}${minutes}${seconds}`;
   }
 
+const uploadImage = async(imageSource, token, blogName, mainWindow, displayFlag) =>{
+    mainWindow.webContents.send('publish-response', {status:"doing", witch:"tistroy", result:displayFlag? "커버 이미지를 업로드중 입니다." : "컨텐츠 이미지 업로드중 입니다", code:201});
+    let buffer;
+
+    if (imageSource.startsWith('http://') || imageSource.startsWith('https://')) {
+        const response = await axios.get(imageSource, { responseType: 'arraybuffer' });
+        buffer = Buffer.from(response.data, 'binary');
+    } else if (imageSource.startsWith('data:image/')) {
+        buffer = Buffer.from(imageSource.split(',')[1], 'base64');
+    } else {
+        throw { status: "failed", witch:"tistory", result: `파일 버퍼 변환 과정에서 실패하였습니다. ${error.response.data}`, code: 400 };
+    }
+
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+
+    const formData = new FormData();
+    formData.append('uploadedfile', stream, { filename: `${getCurrentTime()}.png` });
+    try {
+        const response = await axios.post(
+            `https://www.tistory.com/apis/post/attach?access_token=${token}&blogName=${blogName}&output=json`,
+            formData,
+        );
+        mainWindow.webContents.send('publish-response', {status:"doing", witch:"tistroy", result:displayFlag? "커버 이미지 업로드가 완료되었습니다." : "컨텐츠 이미지 업로드가 완료되었습니다.", code:201});
+        if(displayFlag){
+            return response.data.tistory.replacer.replace(/height="[^"]*"/, match => `${match} style="display:none" display="none"`);
+        }else{
+            return response.data.tistory.replacer
+        }
+        
+    } catch (error) {
+        throw { status: "failed", witch:"tistory", result: `티스토리 파일 업로드 과정에서 실패했습니다. ${error.response.data.tistory.error_message}`, code: error.response.data.tistory.status };
+    }
+}
+
 module.exports = {
     getFormattedDate,
     saveMarkdownFile,
     saveHtmlFile,
-    getCurrentTime
+    getCurrentTime,
+    uploadImage
 }
