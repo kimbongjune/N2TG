@@ -97,6 +97,7 @@
 2. 실행 및 설명
     1. 설치
         - 사용자의 OS 환경에 맞게 설치파일을 다운로드 및 설치합니다.
+        - ※맥 OS의 경우 보안 및 개인정보 탭에서 앱을 허용하여야 사용이 가능합니다.
         - [다운로드 링크](https://github.com/kimbongjune/N2TG/releases/tag/1.0.0)<br>
         ![다운로드 및 실행](./resources/image/download(1).png)<br>
         - 자동으로 설치 후 실행됩니다.<br><br>
