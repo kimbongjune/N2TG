@@ -8,7 +8,7 @@
   - [설치 및 실행 가이드 문서](#-설치-및-실행-가이드-문서)
   - [사용 기술](#-사용-기술)
   - [버그](#-발생할-수-있는-버그)
-  - [다운로드](https://github.com/kimbongjune/N2TG/releases/tag/1.0.0)
+  - [다운로드](#-다운로드-링크)
 <br><br>
 
 ## 📜 프로젝트 개요
@@ -99,7 +99,7 @@
     1. 설치
         - 사용자의 OS 환경에 맞게 설치파일을 다운로드 및 설치합니다.
         - ※맥 OS의 경우 보안 및 개인정보 탭에서 앱을 허용하여야 사용이 가능합니다.
-        - [다운로드 링크](https://github.com/kimbongjune/N2TG/releases/tag/1.0.0)<br>
+        - [다운로드 링크](https://github.com/kimbongjune/N2TG/releases/tag/N2GT_1.0.0)<br>
         ![다운로드 및 실행](./resources/image/download(1).png)<br>
         - 자동으로 설치 후 실행됩니다.<br><br>
     2. 검증
@@ -208,3 +208,6 @@
 - 하위페이지 내의 또다른 페이지, 북마크 등 일부 기능은 html로 변환되지 않습니다.
 - 썸네일에 대한 공식적인 API제공이 존재하지 않아. 간헐적으로 썸네일 지정이 되지 않습니다.
 <br><br>
+
+## 🔗 다운로드 링크
+[다운로드](https://github.com/kimbongjune/N2TG/releases/tag/N2GT_1.0.0)
