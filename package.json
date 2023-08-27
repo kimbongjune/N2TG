@@ -5,6 +5,7 @@
   "main": "main.js",
   "build": {
     "appId": "com.example.n2tg",
+    "icon" : "resources/image/icon.png",
     "productName": "n2tg",
     "mac": {
       "category": "your.app.category.type"

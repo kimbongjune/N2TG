@@ -34,12 +34,12 @@ function createWindow() {
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js')
         },
-        icon: "./resources/image/icon.png"
+        icon: path.join(__dirname, 'resources/image/icon.png')
     });
 
     mainWindow.loadFile('index.html');
 
-    tray = new Tray('./resources/image/icon.png');
+    tray = new Tray(path.join(__dirname, 'resources/image/icon.png'));
     const contextMenu = Menu.buildFromTemplate([
         {
           label: '열기',
