@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu} = require('electron');
 const axios = require('axios');
 const path = require('path');
 const { saveGithubParameter, 
@@ -18,11 +18,12 @@ const { Client } = require("@notionhq/client");
 const {initiallizeNotionToMarkdownInstance, convertToMarkdown} = require('./notionToMarkdown.js'); 
 const convertNotionDataToHtml = require('./notionToHtml');
 const {getFormattedDate, saveMarkdownFile, saveHtmlFile, getCurrentTime, uploadImage} = require("./utils.js")
-const fs = require('fs').promises;
 const jsdom = require("jsdom");
 const { JSDOM } = jsdom;
 
 let mainWindow;
+let tray = null;
+let appIsQuitting = false;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -32,10 +33,33 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js')
-        }
+        },
+        icon: "./resources/image/icon.png"
     });
 
     mainWindow.loadFile('index.html');
+
+    tray = new Tray('./resources/image/icon.png');
+    const contextMenu = Menu.buildFromTemplate([
+        {
+          label: '열기',
+          click: () => {
+            mainWindow.show();
+          }
+        },
+        {
+          label: '종료',
+          click: () => {
+            appIsQuitting = true;
+            mainWindow.close(); 
+          }
+        }
+      ]);
+    tray.setToolTip('N2TG');
+    tray.setContextMenu(contextMenu);
+    tray.on('double-click', () => {
+        mainWindow.show();
+    });
 
     mainWindow.webContents.on('did-finish-load', () => {
         const githubParams = getGithubParameter();
@@ -74,10 +98,31 @@ function createWindow() {
         }
     });
 
-    mainWindow.on('closed', () => {
-        mainWindow = null;
+    mainWindow.on('close', (event) => {
+        if (!appIsQuitting) {
+          event.preventDefault();
+          mainWindow.hide();
+        }
     });
 }
+
+app.whenReady().then(createWindow);
+
+app.on('before-quit', () => {
+    appIsQuitting = true;
+});
+  
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin' || appIsQuitting) {
+      app.quit();
+    }
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+    }
+});
 
 ipcMain.on('open-link', (event, url) => {
     shell.openExternal(url);
@@ -245,7 +290,9 @@ ipcMain.on('publish-tistory', async (event, data) => {
             let title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
             if(data.results[0].icon){
                 const iconImageSrc = data.results[0].icon.emoji
-                title = iconImageSrc+title
+                if(iconImageSrc){
+                    title = iconImageSrc+title
+                }
             }
             mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
             const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
@@ -347,7 +394,9 @@ ipcMain.on('publish-all', async (event, data) => {
         let title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
         if(data.results[0].icon){
             const iconImageSrc = data.results[0].icon.emoji
-            title = iconImageSrc+title
+            if(iconImageSrc){
+                title = iconImageSrc+title
+            }
         }
         const mdString = await convertToMarkdown(data.results[0].id, mainWindow);
         const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}_${title}.md`, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
@@ -394,20 +443,6 @@ ipcMain.on('publish-all', async (event, data) => {
         return mainWindow.webContents.send('publish-response', error);
     }
 })
-
-app.on('ready', createWindow);
-
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
-});
-
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-    }
-});
 
 //티스토리 블로그 글 작성 함수
 const writeBlogContent = async(token, blogName, title, content, tag, categoryId = 0) =>{
