@@ -284,49 +284,48 @@ ipcMain.on('publish-tistory', async (event, data) => {
         if(data.results.length <= 0){
             return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
         }
-        return mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:data, code:400});
-        // const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey, mainWindow);
-        // const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
-        // const accessToken = getTistoryAccessToken()
+        const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey, mainWindow);
+        const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
+        const accessToken = getTistoryAccessToken()
         
-        // if(accessToken){
-        //     let title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
-        //     if(data.results[0].icon){
-        //         const iconImageSrc = data.results[0].icon.emoji
-        //         if(iconImageSrc){
-        //             title = iconImageSrc+title
-        //         }
-        //     }
-        //     mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
-        //     const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
-        //     const blogName = match ? match[1] : null;
+        if(accessToken){
+            let title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
+            if(data.results[0].icon){
+                const iconImageSrc = data.results[0].icon.emoji
+                if(iconImageSrc){
+                    title = iconImageSrc+title
+                }
+            }
+            mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
+            const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
+            const blogName = match ? match[1] : null;
 
-        //     if(data.results[0].cover){
-        //         const coverImageSrc = data.results[0].cover.file.url
-        //         const thumbNail = await uploadImage(coverImageSrc, accessToken, blogName, mainWindow, true)
-        //         const bodyIndex = htmlData.html.indexOf('<body>');
-        //         htmlData.html = htmlData.html.slice(0, bodyIndex + 6) + '\n' + thumbNail + htmlData.html.slice(bodyIndex + 6);
-        //     }
+            if(data.results[0].cover){
+                const coverImageSrc = data.results[0].cover.file.url
+                const thumbNail = await uploadImage(coverImageSrc, accessToken, blogName, mainWindow, true)
+                const bodyIndex = htmlData.html.indexOf('<body>');
+                htmlData.html = htmlData.html.slice(0, bodyIndex + 6) + '\n' + thumbNail + htmlData.html.slice(bodyIndex + 6);
+            }
             
-        //     const dom = new JSDOM(htmlData.html);
-        //     const images = dom.window.document.querySelectorAll('img');
-        //     for (let img of images) {
-        //         if (img.src.startsWith('data:image/')) {
-        //             const src = img.src;
-        //             let replacementTag = await uploadImage(src, accessToken, blogName, mainWindow, false); // uploadImage 함수가 올바르게 정의되어 있어야 함
-        //             if (img.alt) {
-        //                 replacementTag = replacementTag.replace(/height="[^"]*"/, match => `${match} alt="${img.alt}" style="caption:${img.alt}"`);
-        //             }
-        //             img.outerHTML = replacementTag;
-        //         }
-        //     }
-        //     let updatedHtmlData = dom.serialize();
-        //     const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, title, updatedHtmlData, tags, categoryId)
-        //     await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", null, tistoryWriteResponse.tistory.url)
-        //     return mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"프로세스가 정상적으로 완료되었습니다.", code:200, tistoryLink:tistoryWriteResponse.tistory.url});
-        // }else{
-        //     return mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:"티스토리 액세스 키 재발급이 필요합니다.", code:400});
-        // }
+            const dom = new JSDOM(htmlData.html);
+            const images = dom.window.document.querySelectorAll('img');
+            for (let img of images) {
+                if (img.src.startsWith('data:image/')) {
+                    const src = img.src;
+                    let replacementTag = await uploadImage(src, accessToken, blogName, mainWindow, false); // uploadImage 함수가 올바르게 정의되어 있어야 함
+                    if (img.alt) {
+                        replacementTag = replacementTag.replace(/height="[^"]*"/, match => `${match} alt="${img.alt}" style="caption:${img.alt}"`);
+                    }
+                    img.outerHTML = replacementTag;
+                }
+            }
+            let updatedHtmlData = dom.serialize();
+            const tistoryWriteResponse = await writeBlogContent(accessToken, blogName, title, updatedHtmlData, tags, categoryId)
+            await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", null, tistoryWriteResponse.tistory.url)
+            return mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"프로세스가 정상적으로 완료되었습니다.", code:200, tistoryLink:tistoryWriteResponse.tistory.url});
+        }else{
+            return mainWindow.webContents.send('publish-response', {status:"failed", witch:"tistory",  result:"티스토리 액세스 키 재발급이 필요합니다.", code:400});
+        }
     } catch (error) {
         return mainWindow.webContents.send('publish-response', error);
     }
@@ -405,13 +404,11 @@ ipcMain.on('publish-all', async (event, data) => {
         const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}_${title}.md`, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
         if(prUrl){
             mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request생성이 완료되었습니다.", code:201});
-            mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"깃허브 PR 생성이 완료되었습니다", code:201});
-
             const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey, mainWindow);
             const tags = data.results[0].properties.태그.multi_select.map(item => item.name).join(', ')
             const accessToken = getTistoryAccessToken()
             if(accessToken){
-                mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"토큰이 존재하여 검증 없이 진행합니다.", code:201});
+                mainWindow.webContents.send('publish-response', {status:"success", witch:"tistory", result:"티스토리 API토큰이 존재하여 검증 없이 진행합니다.", code:201});
                 const match = getTistoryParameter().tistoryBlogName.match(/https:\/\/(.*?)\.tistory\.com\//);
                 const blogName = match ? match[1] : null;
                 
@@ -458,7 +455,7 @@ const writeBlogContent = async(token, blogName, title, content, tag, categoryId 
             visibility : 3,
             title : title,
             content : content,
-            category : categoryId,
+            category : categoryId == null ? 0 : categoryId,
             tag : tag
         });
         return response.data;
@@ -526,8 +523,8 @@ const fetchDataFromNotion = async (notion, databaseId) => {
             },
             sorts: [
                 {
-                    property: "생성 일시",  // 이 부분은 당신의 데이터베이스에서 사용하는 'Created Time' 프로퍼티의 이름이어야 합니다.
-                    direction: "ascending"  // 가장 빠른 날짜부터 가져옵니다.
+                    property: "생성 일시",
+                    direction: "ascending"
                 }
             ]
         });

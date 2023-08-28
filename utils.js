@@ -45,8 +45,9 @@ const getCurrentTime = () =>{
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
     return `${year}${month}${day}_${hours}${minutes}${seconds}`;
-  }
+}
 
+//티스토리 파일 업로드 API 호출 함수. 게시글 업로드 시 img 태그가 아닌 티스토리 이미지 형태로 업로드 하기 위함
 const uploadImage = async(imageSource, token, blogName, mainWindow, displayFlag) =>{
     mainWindow.webContents.send('publish-response', {status:"doing", witch:"tistroy", result:displayFlag? "커버 이미지를 업로드중 입니다." : "컨텐츠 이미지 업로드중 입니다", code:201});
     let buffer;
