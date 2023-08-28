@@ -188,17 +188,39 @@
 
         
 ## 🛠 사용 기술
-- nodejs 18.16.1
-- @notionhq/client 2.2.11
-- axios 1.4.0
-- electron 26.0.0
-- electron-store 8.1.0
-- electron-builder 24.6.3
-- form-data 4.0.0
-- jsdom 22.1.0
-- notion-private-page-to-html 1.0.1
-- notion-to-md 3.1.1
-- bootstrap 5.3.1
+- [nodejs 18.16.1](https://github.com/nodejs/node/tree/v18.16.1)
+  - MIT License
+  - [라이선스 정보](https://github.com/nodejs/node/blob/master/LICENSE)
+- [@notionhq/client 2.2.11](https://github.com/makenotion/notion-sdk-js/tree/v2.2.11)
+  - MIT License
+  - [라이선스 정보](https://github.com/makenotion/notion-sdk-js/blob/v2.2.11/LICENSE)
+- [axios 1.4.0](https://github.com/axios/axios/tree/v1.4.0)
+  - MIT License
+  - [라이선스 정보](https://github.com/axios/axios/blob/main/LICENSE)
+- [electron 26.0.0](https://github.com/electron/electron/tree/v26.0.0)
+  - MIT License
+  - [라이선스 정보](https://github.com/electron/electron/blob/main/LICENSE)
+- [electron-store 8.1.0](https://github.com/sindresorhus/electron-store/tree/v8.1.0)
+  - MIT License
+  - [라이선스 정보](https://github.com/sindresorhus/electron-store/blob/main/license)
+- [electron-builder 24.6.3](https://github.com/electron-userland/electron-builder/tree/v24.6.3)
+  - MIT License
+  - [라이선스 정보](https://github.com/electron-userland/electron-builder/blob/master/LICENSE)
+- [form-data 4.0.0](https://github.com/form-data/form-data/tree/v4.0.0)
+  - MIT License
+  - [라이선스 정보](https://github.com/form-data/form-data/blob/master/License)
+- [jsdom 22.1.0](https://github.com/jsdom/jsdom/tree/22.1.0)
+  - MIT License
+  - [라이선스 정보](https://github.com/jsdom/jsdom/blob/master/LICENSE.txt)
+- [notion-private-page-to-html 1.0.1](https://github.com/RFG-G/notion-private-page-to-html)
+  - MIT License
+  - [라이선스 정보](https://github.com/RFG-G/notion-private-page-to-html/blob/main/LICENSE)
+- [notion-to-md 3.1.1](https://github.com/souvikinator/notion-to-md/tree/v3.1.1)
+  - MIT License
+  - [라이선스 정보](https://github.com/souvikinator/notion-to-md/blob/master/LICENSE)
+- [bootstrap 5.3.1](https://github.com/twbs/bootstrap/tree/v5.3.1)
+  - MIT License
+  - [라이선스 정보](https://github.com/twbs/bootstrap/blob/main/LICENSE)
 <br><br>
 
 ## 🐞 발생할 수 있는 버그
