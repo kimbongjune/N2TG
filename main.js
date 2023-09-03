@@ -234,7 +234,7 @@ ipcMain.on('tistory-api-validation', async (event, data) => {
                     const response = await getAccessToken(tistoryAppIDInput, tistorySecretKeyInput, tistoryBlogName, authCode);
                     console.log(response)
                     //mainWindow.webContents.send('tistory-validation-response',  {status:"success", result : accessToken, code:200});
-                    const match = currentPageUrl.match(/https:\/\/(.*?)\.tistory\.com\//);
+                    const match = tistoryBlogName.match(/https?:\/\/(.*?)\.tistory\.com\//);
                     const blogName = match ? match[1] : null;
                     if(response){
                         const tistoryWriteResponse = await readBlogCategory(response.access_token, blogName)
@@ -352,12 +352,20 @@ ipcMain.on('publish-github', async (event, data) => {
             return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
         }
         let title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
+        let mdFile = `${getFormattedDate()}_${title}.md`;
+        if(data.results[0].properties["깃허브 카테고리"].multi_select.length > 0){
+            console.log(data.results[0].properties["깃허브 카테고리"].multi_select.map(data => data.name).join('/'))
+            const mdFilePath = data.results[0].properties["깃허브 카테고리"].multi_select.map(data => data.name).join('/')
+            mdFile = `${mdFilePath}/${mdFile}`
+        }
         if(data.results[0].icon){
             const iconImageSrc = data.results[0].icon.emoji
-            title = iconImageSrc+title
+            if(iconImageSrc){
+                title = iconImageSrc+title
+            }
         }
         const mdString = await convertToMarkdown(data.results[0].id, mainWindow);
-        const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}_${title}.md`, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
+        const prUrl = await processGithubActions(username, repositoryName, mdFile, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
         if(prUrl){
             mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request생성이 완료되었습니다.", code:201});
             await updatePageStatusToPublished(notion, data.results[0].id, "발행 완료", prUrl)
@@ -394,6 +402,12 @@ ipcMain.on('publish-all', async (event, data) => {
             return mainWindow.webContents.send('publish-response', {status:"success", witch:"notion", result:"발행 할 게시글이 없습니다.", code:403});
         }
         let title = data.results[0].properties.제목.title.map(title => title.plain_text).join('')
+        let mdFile = `${getFormattedDate()}_${title}.md`;
+        if(data.results[0].properties["깃허브 카테고리"].multi_select.length > 0){
+            console.log(data.results[0].properties["깃허브 카테고리"].multi_select.map(data => data.name).join('/'))
+            const mdFilePath = data.results[0].properties["깃허브 카테고리"].multi_select.map(data => data.name).join('/')
+            mdFile = `${mdFilePath}/${mdFile}`
+        }
         if(data.results[0].icon){
             const iconImageSrc = data.results[0].icon.emoji
             if(iconImageSrc){
@@ -401,7 +415,7 @@ ipcMain.on('publish-all', async (event, data) => {
             }
         }
         const mdString = await convertToMarkdown(data.results[0].id, mainWindow);
-        const prUrl = await processGithubActions(username, repositoryName, `${getFormattedDate()}_${title}.md`, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
+        const prUrl = await processGithubActions(username, repositoryName, mdFile, mdString.parent, `${getFormattedDate()}_${title}.md created`, githubToken)
         if(prUrl){
             mainWindow.webContents.send('publish-response', {status:"doing", witch:"github", result:"Pull Request생성이 완료되었습니다.", code:201});
             const htmlData = await convertNotionDataToHtml(data.results[0].id, notionApiKey, mainWindow);

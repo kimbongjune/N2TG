@@ -1,0 +1,25 @@
+name: Update README.md
+
+on:
+  push:
+    paths:
+      - '**.md'
+      - '!README.md'
+    branches:
+      - main
+
+jobs:
+  update_readme:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+      with:
+          fetch-depth: 0
+    - run: npm install @actions/core @actions/github fs axios
+    - name: Run script
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        DELETED_FILES: ${{ env.DELETED_FILES }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: node update_readme.js
